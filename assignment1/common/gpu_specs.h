@@ -56,7 +56,7 @@
  static inline float get_gpu_peak_bandwidth() {
      cudaDeviceProp prop;
      cudaGetDeviceProperties(&prop, 0);
- 
+
      // Check compute capability to identify GPU
      if (prop.major == 8 && prop.minor == 9) {
          // RTX 4070 Ti SUPER (Ada Lovelace)
@@ -65,10 +65,13 @@
          // Quadro RTX 6000 (Turing)
          return QUADRO_RTX_6000_BANDWIDTH;
      } else {
-         // Fallback: calculate from device properties
-         // memoryClockRate is in kHz, convert to GHz: / 1e6
+         // Fallback: calculate from device attributes (CUDA 12.4+)
+         int memClockRate, memBusWidth;
+         cudaDeviceGetAttribute(&memClockRate, cudaDevAttrMemoryClockRate, 0);
+         cudaDeviceGetAttribute(&memBusWidth, cudaDevAttrGlobalMemoryBusWidth, 0);
+         // memClockRate is in kHz, convert to GHz: / 1e6
          // bandwidth = 2 × clock (GHz) × bus_width (bytes)
-         return 2.0f * (prop.memoryClockRate / 1e6) * (prop.memoryBusWidth / 8);
+         return 2.0f * (memClockRate / 1e6) * (memBusWidth / 8);
      }
  }
  

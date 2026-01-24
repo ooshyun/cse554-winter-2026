@@ -110,9 +110,13 @@ int main() {
     CUDA_CHECK(cudaGetDevice(&device));
     CUDA_CHECK(cudaGetDeviceProperties(&prop, device));
 
+    // Get memory clock via device attribute (CUDA 12.4+)
+    int memClockRate;
+    cudaDeviceGetAttribute(&memClockRate, cudaDevAttrMemoryClockRate, device);
+
     printf("GPU: %s\n", prop.name);
     printf("Peak GPU Memory Bandwidth (calculated): %.2f GB/s\n",
-        2.0 * (prop.memoryClockRate / 1e6) * (prop.memoryBusWidth / 8));
+        2.0 * (memClockRate / 1e6) * (prop.memoryBusWidth / 8));
     printf("Peak GPU Memory Bandwidth (datasheet): GPU_PEAK_BANDWIDTH_DATASHEET GB/s\n");
     printf("PCI Express Generation: %d\n", prop.pciDomainID);
     printf("\n");
