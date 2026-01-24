@@ -1,8 +1,8 @@
 # Makefile for RMS Norm Matrix Implementation
 # CSE 554 Assignment 1 - Section 2
 
-NVCC = nvcc
-NVCC_FLAGS = -O3 -arch=sm_89 -std=c++11 -Xptxas -v
+# Include common GPU detection and flags
+include ../../../common.mk
 
 TARGET = rms_norm_matrix_test
 SOURCES = main.cu rms_norm_matrix.cu

@@ -66,7 +66,9 @@
          return QUADRO_RTX_6000_BANDWIDTH;
      } else {
          // Fallback: calculate from device properties
-         return 2.0f * prop.memoryClockRate * (prop.memoryBusWidth / 8) / 1e6;
+         // memoryClockRate is in kHz, convert to GHz: / 1e6
+         // bandwidth = 2 × clock (GHz) × bus_width (bytes)
+         return 2.0f * (prop.memoryClockRate / 1e6) * (prop.memoryBusWidth / 8);
      }
  }
  

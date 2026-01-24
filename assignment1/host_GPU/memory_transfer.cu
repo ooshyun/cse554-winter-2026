@@ -112,7 +112,7 @@ int main() {
 
     printf("GPU: %s\n", prop.name);
     printf("Peak GPU Memory Bandwidth (calculated): %.2f GB/s\n",
-        2.0 * prop.memoryClockRate * (prop.memoryBusWidth / 8) / 1e6);
+        2.0 * (prop.memoryClockRate / 1e6) * (prop.memoryBusWidth / 8));
     printf("Peak GPU Memory Bandwidth (datasheet): GPU_PEAK_BANDWIDTH_DATASHEET GB/s\n");
     printf("PCI Express Generation: %d\n", prop.pciDomainID);
     printf("\n");

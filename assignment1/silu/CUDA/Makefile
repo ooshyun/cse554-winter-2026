@@ -1,16 +1,8 @@
 # Makefile for CUDA SiLU Implementation
 # CSE 554 Assignment 1 - Section 1
 
-# Compiler
-NVCC = nvcc
-
-# Compiler flags
-NVCC_FLAGS = -O3 -arch=sm_75 -std=c++11 -Xptxas -v
-# Use appropriate compute capability for your GPU:
-# sm_75 for Turing (RTX 20xx, T4)
-# sm_80 for Ampere (A100, RTX 30xx)
-# sm_86 for RTX 3090
-# sm_89 for RTX 40xx
+# Include common GPU detection and flags
+include ../../../common.mk
 
 # Target executable
 TARGET = silu_test

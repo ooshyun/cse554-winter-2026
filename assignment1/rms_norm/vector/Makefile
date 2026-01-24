@@ -1,10 +1,12 @@
 # Makefile for RMS Norm Vector Implementation
 # CSE 554 Assignment 1 - Section 2
 
-NVCC = nvcc
-# Cooperative groups require compute capability 6.0+, using sm_75 for RTX 4070 Ti SUPER (sm_89)
+# Include common GPU detection and flags
+include ../../../common.mk
+
+# Cooperative groups require compute capability 6.0+
 # Note: -rdc=true (relocatable device code) required for cooperative kernel launch
-NVCC_FLAGS = -O3 -arch=sm_89 -std=c++11 -Xptxas -v -rdc=true
+NVCC_FLAGS += -rdc=true
 
 TARGET = rms_norm_vector_test
 SOURCES = main.cu rms_norm_vector.cu

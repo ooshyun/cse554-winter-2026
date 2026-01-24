@@ -1,8 +1,8 @@
 # Makefile for Host-GPU Memory Transfer Tests
 # CSE 554 Assignment 1 - Section 3
 
-NVCC = nvcc
-NVCC_FLAGS = -O3 -arch=sm_89 -std=c++11
+# Include common GPU detection and flags
+include ../../common.mk
 
 # Targets
 MEMORY_TRANSFER = memory_transfer_test
