@@ -1,0 +1,153 @@
+========================================================================
+CSE 554 Assignment 1 - Section 1: SiLU (CUDA)
+========================================================================
+
+Compiling CUDA SiLU kernel...
+rm -f main.o silu.o silu_test
+nvcc -O3 -arch=sm_75 -std=c++11 -Xptxas -v -c main.cu -o main.o
+nvcc -O3 -arch=sm_75 -std=c++11 -Xptxas -v -c silu.cu -o silu.o
+nvcc -O3 -arch=sm_75 -std=c++11 -Xptxas -v -o silu_test main.o silu.o
+✓ Compilation successful
+
+========================================================================
+Running CUDA SiLU Tests...
+========================================================================
+CSE 554 Assignment 1 - Section 1: SiLU CUDA Implementation
+================================================================================
+GPU: NVIDIA GeForce RTX 4070 Ti SUPER
+Compute Capability: 8.9
+Memory Clock Rate: 10.50 GHz
+Memory Bus Width: 256 bits
+Peak Memory Bandwidth: 672.06 GB/s
+
+================================================================================
+CORRECTNESS TEST
+================================================================================
+
+Input -> CPU Output | CUDA Output | Difference
+--------------------------------------------------------------
+ -5.00 ->  -0.033464 |  -0.033464 | 0.00e+00
+ -2.00 ->  -0.238406 |  -0.238406 | 0.00e+00
+ -1.00 ->  -0.268941 |  -0.268941 | 0.00e+00
+ -0.50 ->  -0.188770 |  -0.188770 | 0.00e+00
+  0.00 ->   0.000000 |   0.000000 | 0.00e+00
+  0.50 ->   0.311230 |   0.311230 | 0.00e+00
+  1.00 ->   0.731059 |   0.731059 | 0.00e+00
+  2.00 ->   1.761594 |   1.761594 | 0.00e+00
+  5.00 ->   4.966536 |   4.966536 | 0.00e+00
+ 10.00 ->   9.999546 |   9.999546 | 0.00e+00
+  Max difference: 0.00e+00 at index 0
+    CUDA: -0.033464, CPU: -0.033464
+
+✓ Correctness test: PASSED
+
+================================================================================
+PERFORMANCE BENCHMARK (8192 x 8192 matrix)
+================================================================================
+Matrix size: 8192 x 8192 = 67108864 elements
+Element size: 4 bytes
+Total memory: 256.00 MB
+Iterations: 100
+
+Testing BASIC kernel...
+  Execution time: 0.8724 ms
+  Bandwidth: 573.11 GB/s
+
+Testing OPTIMIZED kernel...
+  Execution time: 0.8735 ms
+  Bandwidth: 572.42 GB/s
+
+Testing FAST kernel...
+  Execution time: 0.8731 ms
+  Bandwidth: 572.66 GB/s
+
+Verifying FAST kernel correctness...
+  Max difference: 9.54e-07 at index 38
+    CUDA: 9.670741, CPU: 9.670740
+✓ Verification: PASSED
+
+================================================================================
+SUMMARY
+================================================================================
+Target bandwidth: > 500 GB/s
+Achieved bandwidth (FAST kernel): 572.66 GB/s
+Status: ✓ PASSED
+Speedup over basic: 1.00x
+================================================================================
+
+✓ All tests complete!
+  Run Nsight Compute: ncu -o profiling_results/cuda_silu ./silu_test
+
+========================================================================
+Profiling with Nsight Compute...
+========================================================================
+ncu -o ../../../profiling_results/cuda_silu --set full ./silu_test
+==PROF== Connected to process 1922848 (/home/seunghyunoh/workspace/research/uw-cs554/srcs/cuda/silu/silu_test)
+==ERROR== ERR_NVGPUCTRPERM - The user does not have permission to access NVIDIA GPU Performance Counters on the target device 0. For instructions on enabling permissions and to get more information see https://developer.nvidia.com/ERR_NVGPUCTRPERM
+CSE 554 Assignment 1 - Section 1: SiLU CUDA Implementation
+================================================================================
+GPU: NVIDIA GeForce RTX 4070 Ti SUPER
+Compute Capability: 8.9
+Memory Clock Rate: 10.50 GHz
+Memory Bus Width: 256 bits
+Peak Memory Bandwidth: 672.06 GB/s
+
+================================================================================
+CORRECTNESS TEST
+================================================================================
+
+Input -> CPU Output | CUDA Output | Difference
+--------------------------------------------------------------
+ -5.00 ->  -0.033464 |  -0.033464 | 0.00e+00
+ -2.00 ->  -0.238406 |  -0.238406 | 0.00e+00
+ -1.00 ->  -0.268941 |  -0.268941 | 0.00e+00
+ -0.50 ->  -0.188770 |  -0.188770 | 0.00e+00
+  0.00 ->   0.000000 |   0.000000 | 0.00e+00
+  0.50 ->   0.311230 |   0.311230 | 0.00e+00
+  1.00 ->   0.731059 |   0.731059 | 0.00e+00
+  2.00 ->   1.761594 |   1.761594 | 0.00e+00
+  5.00 ->   4.966536 |   4.966536 | 0.00e+00
+ 10.00 ->   9.999546 |   9.999546 | 0.00e+00
+  Max difference: 0.00e+00 at index 0
+    CUDA: -0.033464, CPU: -0.033464
+
+✓ Correctness test: PASSED
+
+================================================================================
+PERFORMANCE BENCHMARK (8192 x 8192 matrix)
+================================================================================
+Matrix size: 8192 x 8192 = 67108864 elements
+Element size: 4 bytes
+Total memory: 256.00 MB
+Iterations: 100
+
+Testing BASIC kernel...
+  Execution time: 0.8739 ms
+  Bandwidth: 572.17 GB/s
+
+Testing OPTIMIZED kernel...
+  Execution time: 0.8747 ms
+  Bandwidth: 571.65 GB/s
+
+Testing FAST kernel...
+  Execution time: 0.8755 ms
+  Bandwidth: 571.12 GB/s
+
+Verifying FAST kernel correctness...
+  Max difference: 9.54e-07 at index 38
+    CUDA: 9.670741, CPU: 9.670740
+✓ Verification: PASSED
+
+================================================================================
+SUMMARY
+================================================================================
+Target bandwidth: > 500 GB/s
+Achieved bandwidth (FAST kernel): 571.12 GB/s
+Status: ✓ PASSED
+Speedup over basic: 1.00x
+================================================================================
+
+✓ All tests complete!
+  Run Nsight Compute: ncu -o profiling_results/cuda_silu ./silu_test
+==PROF== Disconnected from process 1922848
+==WARNING== No kernels were profiled.

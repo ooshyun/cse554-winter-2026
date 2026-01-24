@@ -1,0 +1,21 @@
+Generating SQLite file profiling_results/rms_norm_vector.sqlite from profiling_results/rms_norm_vector.nsys-rep
+Processing [profiling_results/rms_norm_vector.sqlite] with [/opt/nvidia/nsight-systems/2023.4.4/host-linux-x64/reports/cuda_gpu_kern_sum.py]... 
+
+ ** CUDA GPU Kernel Summary (cuda_gpu_kern_sum):
+
+ Time (%)  Total Time (ns)  Instances  Avg (ns)  Med (ns)  Min (ns)  Max (ns)  StdDev (ns)                                         Name                                        
+ --------  ---------------  ---------  --------  --------  --------  --------  -----------  -----------------------------------------------------------------------------------
+     40.7        1,453,138        112  12,974.4  13,072.5     1,824    13,376      1,072.3  rms_norm_vector_fast_phase2(const float4 *, float4 *, const float *, int, int, int)
+     38.3        1,368,436        110  12,440.3  12,448.5    11,776    12,768        185.7  rms_norm_vector_phase2(const float *, float *, const float *, int, int)            
+     11.9          426,854        110   3,880.5   3,872.0     3,840     4,064         26.6  rms_norm_vector_phase1(const float *, float *, int)                                
+      9.1          324,515        112   2,897.5   2,912.0     1,696     3,040        119.0  rms_norm_vector_fast_phase1(const float4 *, float *, int)                          
+
+Processing [profiling_results/rms_norm_vector.sqlite] with [/opt/nvidia/nsight-systems/2023.4.4/host-linux-x64/reports/cuda_gpu_mem_size_sum.py]... 
+
+ ** CUDA GPU MemOps Summary (by Size) (cuda_gpu_mem_size_sum):
+
+ Total (MB)  Count  Avg (MB)  Med (MB)  Min (MB)  Max (MB)  StdDev (MB)           Operation          
+ ----------  -----  --------  --------  --------  --------  -----------  ----------------------------
+      4.195      2     2.097     2.097     0.000     4.194        2.966  [CUDA memcpy Device-to-Host]
+      4.195      2     2.097     2.097     0.000     4.194        2.966  [CUDA memcpy Host-to-Device]
+

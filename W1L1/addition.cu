@@ -16,6 +16,7 @@ __global__ void add(int *a, int *b, int *c, size_t num) {
 
 int main() {
     size_t num = 1000000000;
+    float num_iterations = 100;
 
     int * host_a = new int[num];
     int * host_b = new int[num];
@@ -49,9 +50,40 @@ int main() {
     num_threads corresponds to blockDim: how many threads per block you want.
 
     */
-    add<<<num_block, num_threads>>>(d_a, d_b, d_c, num);
-
+    cudaEvent_t start, stop;
+    cudaEventCreate(&start);
+    cudaEventCreate(&stop);
+    
+    // Warmup: Run kernel a few times to stabilize GPU state (clock scaling, cache warmup)
+    for (int i = 0; i < 10; i++) {
+        add<<<num_block, num_threads>>>(d_a, d_b, d_c, num);
+    }
     cudaDeviceSynchronize();
+
+    float time_kernel = 0;
+
+    // Now measure the actual kernel execution time
+    // Record start event and ensure it's recorded before kernel launch
+    // cudaEventRecord(start);
+    // cudaEventSynchronize(start);  // Ensure start event is recorded
+
+    for (int i = 0; i < num_iterations; i++) {
+        cudaEventRecord(start);
+        add<<<num_block, num_threads>>>(d_a, d_b, d_c, num);
+        cudaEventRecord(stop);
+        cudaEventSynchronize(stop);
+        
+        float lap_time;
+        cudaEventElapsedTime(&lap_time, start, stop);
+        time_kernel += lap_time;
+        // add<<<num_block, num_threads>>>(d_a, d_b, d_c, num);
+    }
+
+    // cudaEventRecord(stop);
+    // cudaEventSynchronize(stop);  // Wait for stop event to be recorded
+    // float time_kernel = 0;
+    // cudaEventElapsedTime(&time_kernel, start, stop);
+
     cudaError_t err = cudaGetLastError();
     if (err != cudaSuccess) {
         std::cerr << "CUDA error: " << cudaGetErrorString(err) << std::endl;
@@ -61,7 +93,6 @@ int main() {
     // Copy result back to host
     cudaMemcpy(host_c, d_c, num * sizeof(int), cudaMemcpyDeviceToHost);
 
-
     for (int i = 0; i < num; i++) {
         if (host_c[i] != host_a[i] + host_b[i]) {
             std::cerr << "Error at index " << i << ": " << host_c[i] << std::endl;
@@ -69,7 +100,16 @@ int main() {
         }
     }
 
+
+    float time_kernel_ms = time_kernel / num_iterations;  // Average over num_iterations iterations
+    // Read 2 + Write 1 = 3 
+    float bandwidth_kernel = 3 * num * sizeof(int) / (time_kernel_ms / 1000) / 1e9;
+    float efficiency_kernel = bandwidth_kernel / 672.0f * 100.0f;
+
     std::cout << "Result: " << host_c[0] << std::endl;
+    std::cout << "Kernel execution time: " << time_kernel_ms << " ms" << std::endl;
+    std::cout << "Bandwidth: " << bandwidth_kernel << " GB/s" << std::endl;
+    std::cout << "Efficiency: " << efficiency_kernel << "%" << std::endl;
 
     // Free device memory
     cudaFree(d_a);

@@ -51,6 +51,7 @@ int main() {
 
     dim3 num_block((num / 4 + BLOCKSIZE - 1) / BLOCKSIZE);
     dim3 num_threads(BLOCKSIZE);
+    
     add2<<<num_block, num_threads>>>(d_a, d_b, d_c, num);
 
     cudaDeviceSynchronize();
@@ -63,7 +64,6 @@ int main() {
 
     // Copy result back to host
     cudaMemcpy(host_c, d_c, num * sizeof(int), cudaMemcpyDeviceToHost);
-
 
     for (int i = 0; i < num; i++) {
         if (host_c[i] != host_a[i] + host_b[i]) {
