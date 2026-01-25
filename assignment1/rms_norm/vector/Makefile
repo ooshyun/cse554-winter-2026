@@ -12,6 +12,9 @@ TARGET = rms_norm_vector_test
 SOURCES = main.cu rms_norm_vector.cu
 OBJECTS = $(SOURCES:.cu=.o)
 
+# FLAG for Nsight Compute profiling
+PROFILE_FLAGS = -DPROFILE_NCUS
+
 all: $(TARGET)
 
 $(TARGET): $(OBJECTS)
