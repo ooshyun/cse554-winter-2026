@@ -223,24 +223,39 @@ float copy_first_column_optimized(const float* h_matrix, float* d_column,
 }
 
 
+// Global resources for ultra-optimized kernel (reused across calls)
+static cudaStream_t g_stream = nullptr;
+static cudaEvent_t g_start = nullptr;
+static cudaEvent_t g_stop = nullptr;
+static bool g_resources_initialized = false;
+
+void init_ultra_resources() {
+    if (!g_resources_initialized) {
+        CUDA_CHECK(cudaStreamCreate(&g_stream));
+        CUDA_CHECK(cudaEventCreate(&g_start));
+        CUDA_CHECK(cudaEventCreate(&g_stop));
+        g_resources_initialized = true;
+    }
+}
+
+void cleanup_ultra_resources() {
+    if (g_resources_initialized) {
+        CUDA_CHECK(cudaStreamDestroy(g_stream));
+        CUDA_CHECK(cudaEventDestroy(g_start));
+        CUDA_CHECK(cudaEventDestroy(g_stop));
+        g_resources_initialized = false;
+    }
+}
+
 /**
- * Ultra-optimized: Pinned memory + cudaMemcpy2DAsync
+ * Ultra-optimized: Pinned memory + cudaMemcpy2DAsync with reused resources
  * Directly copy strided first column from host matrix to GPU
  */
 float copy_first_column_ultra(float* h_pinned_matrix, float* d_column,
                             int rows, int cols) {
-    cudaEvent_t start, stop;
-    CUDA_CHECK(cudaEventCreate(&start));
-    CUDA_CHECK(cudaEventCreate(&stop));
-
-    // Use a stream for async operations
-    cudaStream_t stream;
-    CUDA_CHECK(cudaStreamCreate(&stream));
-
-    CUDA_CHECK(cudaEventRecord(start, stream));
+    CUDA_CHECK(cudaEventRecord(g_start, g_stream));
 
     // Copy first column directly from strided matrix memory
-    // This respects the problem requirement: copy from matrix, not pre-extracted data
     CUDA_CHECK(cudaMemcpy2DAsync(
         d_column,                    // dst
         sizeof(float),               // dst pitch (contiguous)
@@ -249,18 +264,14 @@ float copy_first_column_ultra(float* h_pinned_matrix, float* d_column,
         sizeof(float),               // width (1 float per row)
         rows,                        // height (number of rows)
         cudaMemcpyHostToDevice,
-        stream
+        g_stream
     ));
 
-    CUDA_CHECK(cudaEventRecord(stop, stream));
-    CUDA_CHECK(cudaStreamSynchronize(stream));
+    CUDA_CHECK(cudaEventRecord(g_stop, g_stream));
+    CUDA_CHECK(cudaEventSynchronize(g_stop));
 
     float time_ms;
-    CUDA_CHECK(cudaEventElapsedTime(&time_ms, start, stop));
-
-    CUDA_CHECK(cudaStreamDestroy(stream));
-    CUDA_CHECK(cudaEventDestroy(start));
-    CUDA_CHECK(cudaEventDestroy(stop));
+    CUDA_CHECK(cudaEventElapsedTime(&time_ms, g_start, g_stop));
 
     return time_ms;
 }
@@ -315,6 +326,9 @@ int main() {
     // Copy matrix to pinned memory
     memcpy(h_pinned_matrix, h_matrix, matrix_size);
 
+    // Initialize reusable resources for ultra kernel
+    init_ultra_resources();
+
     // Test picked kernel
     printf("\n");
     printf("================================================================================\n");
@@ -329,6 +343,7 @@ int main() {
     printf("Average time: %.2f μs\n", avg_time_picked * 1000.0f);
     printf("Status: %s\n", avg_time_picked * 1000.0f < 100.0f ? "✓ PASSED" : "✗ FAILED");
 
+    cleanup_ultra_resources();
     CUDA_CHECK(cudaFreeHost(h_pinned_matrix));
 
 #if !defined(PROFILE_NCUS)
@@ -361,7 +376,7 @@ int main() {
     printf("SUMMARY\n");
     printf("================================================================================\n");
     printf("Target: < 100 μs\n");
-    printf("Picked kernel: %.2f μs\n", avg_time_picked * 1000.0f);
+    printf("Picked kernel (Ultra-optimized): %.2f μs\n", avg_time_picked * 1000.0f);
     printf("Status: %s\n", avg_time_picked * 1000.0f < 100.0f ? "✓ PASSED" : "✗ FAILED");
     printf("================================================================================\n");
     // Cleanup
