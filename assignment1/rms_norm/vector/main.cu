@@ -31,8 +31,8 @@ extern float measure_rms_norm_vector_time(void (*)(const float*, float*, int),
                                           const float*, float*, int, int);
 extern float calculate_rms_norm_vector_bandwidth(int, float);
 
-// Picked kernel: rms_norm_vector_basic_v1
-void (*picked_kernel)(const float*, float*, int) = rms_norm_vector_basic_v1;
+// Picked kernel: rms_norm_vector_basic (most stable, no fancy optimizations)
+void (*picked_kernel)(const float*, float*, int) = rms_norm_vector_basic;
 
 
 /**
@@ -185,8 +185,25 @@ void benchmark_performance() {
     // rms_norm_vector_basic rms_norm_vector_optimized rms_norm_vector_fast
     // rms_norm_vector_w2l3_reduction rms_norm_vector_w2l3_tile rms_norm_vector_w2l3_hybrid
     printf("Testing RMS Norm Vector kernel...\n");
+    fflush(stdout);
+
+    // DEBUG: Try single execution first
+    printf("  [DEBUG] Running single test execution...\n");
+    fflush(stdout);
+    (*picked_kernel)(d_input, d_output, n);
+    CUDA_CHECK(cudaGetLastError());
+    printf("  [DEBUG] Kernel launch successful\n");
+    fflush(stdout);
+    CUDA_CHECK(cudaDeviceSynchronize());
+    printf("  [DEBUG] Synchronization successful\n");
+    fflush(stdout);
+
+    printf("  [DEBUG] Starting timed benchmark...\n");
+    fflush(stdout);
     float time_picked = measure_rms_norm_vector_time(
       picked_kernel, d_input, d_output, n, num_iterations);
+    printf("  [DEBUG] Benchmark complete\n");
+    fflush(stdout);
     float bandwidth_picked = calculate_rms_norm_vector_bandwidth(n, time_picked);
     const float peak_bandwidth_datasheet = GPU_PEAK_BANDWIDTH_DATASHEET;
     float percentage_picked = (bandwidth_picked / peak_bandwidth_datasheet) * 100.0f;
