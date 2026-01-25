@@ -59,6 +59,11 @@ if [ "$RUN_QUESTION_NUMBER" -eq 3 ] || [ "$RUN_QUESTION_NUMBER" -eq 9 ]; then
     make run
     echo ""
 
+    echo "Profiling with Nsight Compute..."
+    make profile
+    echo "✓ Profiling complete"
+    echo ""
+
     # Clean up
     make clean
     echo "✓ Cleanup complete"

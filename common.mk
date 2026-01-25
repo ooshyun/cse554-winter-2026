@@ -40,7 +40,7 @@ endif
 # Note: C++17 required for CUDA 13.0 cooperative groups
 # NVCC_FLAGS = -O3 -arch=$(SM_ARCH) -std=c++17 --use_fast_math -Xptxas -v
 NVCC_FLAGS = -arch=$(SM_ARCH) -std=c++17
-LINK_FLAGS = -lcudart
+LINK_FLAGS = -cudart static
 
 # Print detected configuration
 $(info ========================================)
