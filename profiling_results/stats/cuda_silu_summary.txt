@@ -1,4 +1,0 @@
-Generating SQLite file profiling_results/cuda_silu.sqlite from profiling_results/cuda_silu.nsys-rep
-Processing [profiling_results/cuda_silu.sqlite] with [summary]... 
-ERROR: Report 'summary' could not be found.
-

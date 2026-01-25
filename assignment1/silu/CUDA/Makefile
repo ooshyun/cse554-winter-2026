@@ -21,7 +21,7 @@ all: $(TARGET)
 
 # Link object files
 $(TARGET): $(OBJECTS)
-	$(NVCC) $(NVCC_FLAGS) -o $@ $^
+	$(NVCC) $(NVCC_FLAGS) -o $@ $^ $(LINK_FLAGS)
 
 # Compile source files
 %.o: %.cu
@@ -50,7 +50,7 @@ profile: $(PROFILE_TARGET)
 
 # Build profile target
 $(PROFILE_TARGET): $(PROFILE_OBJECTS)
-	$(NVCC) $(NVCC_FLAGS) $(PROFILE_FLAGS) -o $@ $^
+	$(NVCC) $(NVCC_FLAGS) $(PROFILE_FLAGS) -o $@ $^ $(LINK_FLAGS)
 
 # Clean build files
 clean:

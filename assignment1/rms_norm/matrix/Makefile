@@ -14,7 +14,7 @@ PROFILE_FLAGS = -DPROFILE_NCUS
 all: $(TARGET)
 
 $(TARGET): $(OBJECTS)
-	$(NVCC) $(NVCC_FLAGS) -o $@ $^
+	$(NVCC) $(NVCC_FLAGS) -o $@ $^ $(LINK_FLAGS)
 
 %.o: %.cu
 	$(NVCC) $(NVCC_FLAGS) -c $< -o $@
@@ -41,7 +41,7 @@ profile: $(PROFILE_TARGET)
 
 # Build profile target
 $(PROFILE_TARGET): $(PROFILE_OBJECTS)
-	$(NVCC) $(NVCC_FLAGS) $(PROFILE_FLAGS) -o $@ $^
+	$(NVCC) $(NVCC_FLAGS) $(PROFILE_FLAGS) -o $@ $^ $(LINK_FLAGS)
 
 clean:
 	rm -f $(OBJECTS) $(TARGET)

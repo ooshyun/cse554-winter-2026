@@ -24,9 +24,14 @@
 // Function declarations
 extern void rms_norm_vector_basic(const float*, float*, int);
 extern void rms_norm_vector_fast(const float*, float*, int);
+extern void rms_norm_vector_w2l3_reduction(const float*, float*, int);
+extern void rms_norm_vector_w2l3_hybrid(const float*, float*, int);
 extern float measure_rms_norm_vector_time(void (*)(const float*, float*, int),
                                           const float*, float*, int, int);
 extern float calculate_rms_norm_vector_bandwidth(int, float);
+
+// Picked kernel: rms_norm_vector_w2l3_hybrid
+void (*picked_kernel)(const float*, float*, int) = rms_norm_vector_w2l3_hybrid;
 
 
 /**
@@ -174,10 +179,9 @@ void benchmark_performance() {
 
 
     // Benchmark picked kernel
-    // rms_norm_vector_basic rms_norm_vector_optimized rms_norm_vector_fast 
+    // rms_norm_vector_basic rms_norm_vector_optimized rms_norm_vector_fast
     // rms_norm_vector_w2l3_reduction rms_norm_vector_w2l3_tile rms_norm_vector_w2l3_hybrid
     printf("Testing RMS Norm Vector kernel...\n");
-    void (*picked_kernel)(const float*, float*, int) = rms_norm_vector_basic;
     float time_picked = measure_rms_norm_vector_time(
       picked_kernel, d_input, d_output, n, num_iterations);
     float bandwidth_picked = calculate_rms_norm_vector_bandwidth(n, time_picked);
@@ -259,7 +263,5 @@ int main() {
     benchmark_performance();
 
     printf("\n✓ All tests complete!\n");
-    printf("  Run Nsight Compute: ncu -o profiling_results/rms_norm_vector ./rms_norm_vector_test\n");
-
     return 0;
 }

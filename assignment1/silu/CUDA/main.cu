@@ -29,6 +29,9 @@ extern float measure_kernel_time(void (*)(const float*, float*, int),
                                 const float*, float*, int, int);
 extern float calculate_bandwidth(int n, float time_ms);
 
+// Picked kernel: silu_cuda_basic
+void (*picked_kernel)(const float*, float*, int) = silu_cuda_basic;
+
 
 /**
  * CPU reference implementation of SiLU
@@ -165,7 +168,6 @@ void benchmark_performance() {
     // Benchmark kernel
     // silu_cuda_basic silu_cuda_optimized silu_cuda_fast
     printf("Testing SiLU kernel...\n");
-    void (*picked_kernel)(const float*, float*, int) = silu_cuda_basic;
     float time_picked = measure_kernel_time(picked_kernel, d_input, d_output,
                                         n, num_iterations);
     float bandwidth_picked = calculate_bandwidth(n, time_picked);
@@ -238,7 +240,5 @@ int main() {
     benchmark_performance();
 
     printf("\n✓ All tests complete!\n");
-    printf("  Run Nsight Compute: ncu -o profiling_results/cuda_silu ./silu_test\n");
-
     return 0;
 }
