@@ -149,8 +149,10 @@ void benchmark_performance() {
     const int n = 1024 * 1024;  // 1048576 elements
 #if defined(PROFILE_NCUS)
     const int num_iterations = 1;
+    printf("[PROFILE MODE ENABLED]\n");
 #else
     const int num_iterations = 100;
+    printf("[NORMAL MODE]\n");
 #endif
 
     printf("Vector size: 1 x %d = %d elements\n", n, n);

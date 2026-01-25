@@ -26,6 +26,10 @@ find . -type f -name "*.ncu-rep" -not -path "./.git/*" -print -delete | wc -l | 
 echo "Removing torch_silu.json files..."
 find . -type f -name "torch_silu.json" -not -path "./.git/*" -print -delete | wc -l | xargs -I {} echo "  Removed {} torch_silu.json file(s)"
 
+# Remove .o files (including .profile.o)
+echo "Removing .o files..."
+find . -type f \( -name "*.o" -o -name "*.profile.o" \) -not -path "./.git/*" -print -delete | wc -l | xargs -I {} echo "  Removed {} .o file(s)"
+
 # Remove executable binaries (files without extension that are executable)
 # Exclude shell scripts (.sh files) and common script files
 echo "Removing executable binaries..."
@@ -43,14 +47,19 @@ while IFS= read -r -d '' file; do
 done < <(find . -type f -executable -not -path "./.git/*" -print0)
 echo "  Removed $EXEC_COUNT executable binary file(s)"
 
-# Also remove common test executable patterns
+# Also remove common test executable patterns (including profile variants)
 echo "Removing common test executables..."
-find . -type f \( -name "*_test" -o -name "*test" -o -name "test_*" \) \
+find . -type f \( -name "*_test" -o -name "*test" -o -name "test_*" -o -name "*_profile" -o -name "*test_profile" \) \
     -not -path "./.git/*" \
     -not -name "*.sh" \
     -not -name "*.py" \
     -executable \
     -print -delete | wc -l | xargs -I {} echo "  Removed {} test executable(s)"
+
+# Remove profiling result directories
+echo "Removing profiling result directories..."
+find . -type d -name "profiling_results" -not -path "./.git/*" -exec rm -rf {} + 2>/dev/null || true
+echo "  Removed profiling_results directories"
 
 echo ""
 echo "Cleanup complete!"
