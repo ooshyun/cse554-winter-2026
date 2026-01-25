@@ -455,9 +455,12 @@
  float get_peak_bandwidth_vector_calculated() {
      cudaDeviceProp prop;
      CUDA_CHECK(cudaGetDeviceProperties(&prop, 0));
- 
+
+     int memClockRate;
+     cudaDeviceGetAttribute(&memClockRate, cudaDevAttrMemoryClockRate, 0);
+
      // Peak bandwidth in GB/s (decimal)
-     float peak_gb_s = 2.0f * prop.memoryClockRate * (prop.memoryBusWidth / 8) / 1e6;
+     float peak_gb_s = 2.0f * memClockRate * (prop.memoryBusWidth / 8) / 1e6;
      return peak_gb_s;
  }
  

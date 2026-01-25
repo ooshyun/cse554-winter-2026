@@ -37,7 +37,8 @@ else
 endif
 
 # Standard NVCC flags with detected architecture
-NVCC_FLAGS = -O3 -arch=$(SM_ARCH) -std=c++11 --use_fast_math -Xptxas -v
+# Note: C++17 required for CUDA 13.0 cooperative groups
+NVCC_FLAGS = -O3 -arch=$(SM_ARCH) -std=c++17 --use_fast_math -Xptxas -v
 
 # Print detected configuration
 $(info ========================================)

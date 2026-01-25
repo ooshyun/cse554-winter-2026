@@ -26,7 +26,7 @@ run-copy: $(FIRST_COLUMN)
 
 # Profile first column copy with Nsight Systems
 profile-copy: $(FIRST_COLUMN)
-	mkdir -p profiling_results/copy
+	mkdir -p profiling_results
 	@timestamp=$$(date +%Y%m%d_%H%M%S); \
 	nsys profile -o profiling_results/copy_$$timestamp ./$(FIRST_COLUMN)
 	@timestamp=$$(date +%Y%m%d_%H%M%S); \
