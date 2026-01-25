@@ -41,17 +41,17 @@ run-copy: $(FIRST_COLUMN)
 # Profile first column copy with Nsight Systems
 profile-copy: $(PROFILE_FIRST_COLUMN)
 	mkdir -p profiling_results
-# @timestamp=$$(date +%Y%m%d_%H%M%S); \
-# nsys profile -o profiling_results/$$timestamp ./$(PROFILE_FIRST_COLUMN)
 	@timestamp=$$(date +%Y%m%d_%H%M%S); \
-	ncu -o profiling_results/$$timestamp --set full ./$(PROFILE_FIRST_COLUMN)
+	nsys profile -o profiling_results/$$timestamp ./$(PROFILE_FIRST_COLUMN)
+	# @timestamp=$$(date +%Y%m%d_%H%M%S); \
+	# ncu -o profiling_results/$$timestamp --set full ./$(PROFILE_FIRST_COLUMN)
 
 profile-memory: $(PROFILE_MEMORY_TRANSFER)
 	mkdir -p profiling_results
-# @timestamp=$$(date +%Y%m%d_%H%M%S); \
-# nsys profile -o profiling_results/$$timestamp ./$(PROFILE_MEMORY_TRANSFER)
 	@timestamp=$$(date +%Y%m%d_%H%M%S); \
-	ncu -o profiling_results/$$timestamp --set full ./$(PROFILE_MEMORY_TRANSFER)
+	nsys profile -o profiling_results/$$timestamp ./$(PROFILE_MEMORY_TRANSFER)
+	# @timestamp=$$(date +%Y%m%d_%H%M%S); \
+	# ncu -o profiling_results/$$timestamp --set full ./$(PROFILE_MEMORY_TRANSFER)
 
 clean:
 	rm -f $(MEMORY_TRANSFER) $(FIRST_COLUMN) $(PROFILE_MEMORY_TRANSFER) $(PROFILE_FIRST_COLUMN)

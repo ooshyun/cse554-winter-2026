@@ -38,12 +38,6 @@ if [ "$RUN_QUESTION_NUMBER" -eq 2 ] || [ "$RUN_QUESTION_NUMBER" -eq 9 ]; then
     make run-memory
     echo ""
 
-    # TODO: Add profiling
-    # echo "Profiling with Nsight Systems..."
-    # make profile-memory
-    # echo "✓ Profiling complete"
-    # echo ""
-
     # Clean up
     make clean
     echo "✓ Cleanup complete"

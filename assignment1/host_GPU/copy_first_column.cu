@@ -224,10 +224,10 @@ float copy_first_column_optimized(const float* h_matrix, float* d_column,
 
 
 /**
- * Ultra-optimized: Pre-extracted column in pinned memory + simple async transfer
- * Key insight: Extract first column ONCE in pinned memory, then use fast contiguous copy
+ * Ultra-optimized: Pinned memory + cudaMemcpy2DAsync
+ * Directly copy strided first column from host matrix to GPU
  */
-float copy_first_column_ultra(float* h_pinned_column, float* d_column,
+float copy_first_column_ultra(float* h_pinned_matrix, float* d_column,
                             int rows, int cols) {
     cudaEvent_t start, stop;
     CUDA_CHECK(cudaEventCreate(&start));
@@ -239,11 +239,15 @@ float copy_first_column_ultra(float* h_pinned_column, float* d_column,
 
     CUDA_CHECK(cudaEventRecord(start, stream));
 
-    // Simple contiguous memcpy - much faster than 2D copy for small data
-    CUDA_CHECK(cudaMemcpyAsync(
-        d_column,
-        h_pinned_column,
-        rows * sizeof(float),
+    // Copy first column directly from strided matrix memory
+    // This respects the problem requirement: copy from matrix, not pre-extracted data
+    CUDA_CHECK(cudaMemcpy2DAsync(
+        d_column,                    // dst
+        sizeof(float),               // dst pitch (contiguous)
+        h_pinned_matrix,             // src (start of matrix = first element)
+        cols * sizeof(float),        // src pitch (stride between rows)
+        sizeof(float),               // width (1 float per row)
+        rows,                        // height (number of rows)
         cudaMemcpyHostToDevice,
         stream
     ));
@@ -304,14 +308,12 @@ int main() {
     float* d_column;
     CUDA_CHECK(cudaMalloc(&d_column, rows * sizeof(float)));
 
-    // Allocate pinned memory for JUST the first column (not entire matrix)
-    float* h_pinned_column;
-    CUDA_CHECK(cudaMallocHost(&h_pinned_column, rows * sizeof(float)));
+    // Allocate pinned memory for entire matrix (required for fast strided copy)
+    float* h_pinned_matrix;
+    CUDA_CHECK(cudaMallocHost(&h_pinned_matrix, matrix_size));
 
-    // Extract first column into pinned memory
-    for (int row = 0; row < rows; row++) {
-        h_pinned_column[row] = h_matrix[row * cols];
-    }
+    // Copy matrix to pinned memory
+    memcpy(h_pinned_matrix, h_matrix, matrix_size);
 
     // Test picked kernel
     printf("\n");
@@ -321,13 +323,13 @@ int main() {
 
     float total_time_picked = 0.0f;
     for (int i = 0; i < num_iterations; i++) {
-        total_time_picked += (*picked_kernel)(h_pinned_column, d_column, rows, cols);
+        total_time_picked += (*picked_kernel)(h_pinned_matrix, d_column, rows, cols);
     }
     float avg_time_picked = total_time_picked / num_iterations;
     printf("Average time: %.2f μs\n", avg_time_picked * 1000.0f);
     printf("Status: %s\n", avg_time_picked * 1000.0f < 100.0f ? "✓ PASSED" : "✗ FAILED");
 
-    CUDA_CHECK(cudaFreeHost(h_pinned_column));
+    CUDA_CHECK(cudaFreeHost(h_pinned_matrix));
 
 #if !defined(PROFILE_NCUS)
     // Verify correctness

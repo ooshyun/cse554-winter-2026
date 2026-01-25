@@ -27,12 +27,13 @@ extern void rms_norm_vector_fast(const float*, float*, int);
 extern void rms_norm_vector_w2l3_reduction(const float*, float*, int);
 extern void rms_norm_vector_w2l3_hybrid(const float*, float*, int);
 extern void rms_norm_vector_basic_v1(const float*, float*, int);
+extern void rms_norm_vector_safe_v2(const float*, float*, int);
 extern float measure_rms_norm_vector_time(void (*)(const float*, float*, int),
                                           const float*, float*, int, int);
 extern float calculate_rms_norm_vector_bandwidth(int, float);
 
-// Picked kernel: rms_norm_vector_basic (most stable, no fancy optimizations)
-void (*picked_kernel)(const float*, float*, int) = rms_norm_vector_basic;
+// Picked kernel: rms_norm_vector_safe_v2 (Conservative float4 opt, max compatibility)
+void (*picked_kernel)(const float*, float*, int) = rms_norm_vector_safe_v2;
 
 
 /**
