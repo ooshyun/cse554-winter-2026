@@ -188,7 +188,6 @@ void benchmark_performance() {
 
     bool passed = verify_result(h_output_cuda, h_output_cpu, verify_size);
     printf("✓ Verification: %s\n", passed ? "PASSED" : "FAILED");
-#endif
 
     // Summary
     printf("\n");
@@ -201,6 +200,7 @@ void benchmark_performance() {
         bandwidth_picked, percentage_picked);
     printf("Status: %s\n", bandwidth_picked > 500.0f ? "✓ PASSED" : "✗ NEEDS OPTIMIZATION");
     printf("================================================================================\n");
+#endif
 
     // Cleanup
     free(h_input);

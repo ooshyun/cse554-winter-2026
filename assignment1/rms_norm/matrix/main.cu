@@ -222,7 +222,7 @@
 
      bool passed = verify_rms_norm(h_output_cuda, h_output_cpu, verify_rows, cols);
      printf("✓ Verification: %s\n", passed ? "PASSED" : "FAILED");
-#endif
+
      // Summary
      printf("\n");
      printf("================================================================================\n");
@@ -234,7 +234,8 @@
             bandwidth_picked, percentage_picked);
      printf("Status: %s\n", bandwidth_picked > 300.0f ? "✓ PASSED" : "✗ NEEDS OPTIMIZATION");
      printf("================================================================================\n");
- 
+#endif
+
      // Cleanup
      free(h_input);
      free(h_output_cpu);

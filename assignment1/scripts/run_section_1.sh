@@ -33,7 +33,6 @@ if [ "$RUN_QUESTION_NUMBER" -eq 2 ] || [ "$RUN_QUESTION_NUMBER" -eq 9 ]; then
     uv run python silu/silu_torch.py --profile --profile_name $PROFILE_NAME
     timestamp=$(date +%Y%m%d_%H%M%S)
     nsys profile -o silu/profiling_results/$PROFILE_NAME_$timestamp --stats=true uv run python silu/silu_torch.py
-    nsys stats --report cuda_gpu_kern_sum silu/profiling_results/$PROFILE_NAME_$timestamp.nsys-rep
 else
     echo "Skipping Section 1-Q2."
 fi
