@@ -97,10 +97,10 @@
  __global__ void rms_norm_vector_phase2(const float* input, float* output,
                                          const float* partial_sums, int n,
                                          int num_blocks) {
-     // Thread 0 computes global RMS
+     // Each block independently computes global RMS (redundant but safe)
      __shared__ float global_rms;
- 
-     if (threadIdx.x == 0 && blockIdx.x == 0) {
+
+     if (threadIdx.x == 0) {
          float total_sum = 0.0f;
          for (int i = 0; i < num_blocks; i++) {
              total_sum += partial_sums[i];
@@ -108,7 +108,7 @@
          global_rms = sqrtf(total_sum / n + EPSILON);
      }
      __syncthreads();
- 
+
      // Normalize
      int block_size = blockDim.x;
      for (int i = blockIdx.x * block_size + threadIdx.x; i < n;
@@ -116,63 +116,6 @@
          output[i] = input[i] / global_rms;
      }
  }
- 
- 
- /**
-  * Optimized single-kernel RMS Norm for vector
-  * Uses atomics for global reduction (can be slow but simpler)
-  */
- __global__ void rms_norm_vector_atomic(const float* input, float* output,
-                                         float* global_sum, int n) {
-     extern __shared__ float shared[];
- 
-     int tid = threadIdx.x;
-     int block_size = blockDim.x;
- 
-     // Phase 1: Compute sum of squares
-     float sum = 0.0f;
-     for (int i = blockIdx.x * block_size + tid; i < n; i += gridDim.x * block_size) {
-         float val = input[i];
-         sum += val * val;
-     }
- 
-     // Warp reduction
-     int warp_id = tid / 32;
-     int lane_id = tid % 32;
-     sum = warp_reduce_sum(sum);
- 
-     if (lane_id == 0) {
-         shared[warp_id] = sum;
-     }
-     __syncthreads();
- 
-     // Block reduction
-     if (tid < (block_size / 32)) {
-         sum = shared[tid];
-         sum = warp_reduce_sum(sum);
- 
-         if (tid == 0) {
-             atomicAdd(global_sum, sum);
-         }
-     }
- 
-     __threadfence();
-     __syncthreads();
- 
-     // Wait for all blocks to complete
-     __shared__ float rms;
-     if (tid == 0 && blockIdx.x == 0) {
-         while (atomicAdd(global_sum, 0.0f) == 0.0f);  // Spin wait
-         rms = sqrtf((*global_sum) / n + EPSILON);
-     }
-     __syncthreads();
- 
-     // Phase 2: Normalize
-     for (int i = blockIdx.x * block_size + tid; i < n; i += gridDim.x * block_size) {
-         output[i] = input[i] / rms;
-     }
- }
- 
  
  /**
   * Optimized vector RMS Norm with vectorized loads
@@ -477,8 +420,235 @@
  float calculate_rms_norm_vector_bandwidth(int n, float time_ms) {
      size_t bytes = 2 * (size_t)n * sizeof(float);
      float time_s = time_ms / 1000.0f;
- 
+
      // Use decimal GB/s to match official specs (1 GB = 10^9 bytes)
      return (bytes / time_s) / 1e9;
+ }
+
+
+ /**
+  * ============================================================================
+  * W2L3-INSPIRED OPTIMIZATIONS FOR VECTOR RMS NORM
+  * ============================================================================
+  */
+
+ /**
+  * W2L3 Reduction-inspired kernel for vector
+  * Key features from reduction5.cu:
+  * - Multiple elements per thread (ELEMENTS_PER_THREAD = 64 for long vector)
+  * - Sequential addressing in shared memory reduction
+  * - Grid-stride loop pattern
+  */
+ #define ELEMENTS_PER_THREAD_VEC 64
+ #define BLOCK_SIZE_W2L3_VEC 256
+
+ __global__ void rms_norm_vector_w2l3_reduction_phase1(const float* input,
+                                                        float* partial_sums,
+                                                        int n) {
+     __shared__ float sdata[BLOCK_SIZE_W2L3_VEC];
+
+     int tid = threadIdx.x;
+
+     // Phase 1: Each thread processes multiple elements (reduction5 pattern)
+     float local_sum = 0.0f;
+     int i = blockIdx.x * blockDim.x + tid;
+
+     #pragma unroll 8
+     for (int j = 0; j < ELEMENTS_PER_THREAD_VEC; j++) {
+         if (i < n) {
+             float val = input[i];
+             local_sum += val * val;
+         }
+         i += gridDim.x * blockDim.x;
+     }
+
+     // Store in shared memory
+     sdata[tid] = local_sum;
+     __syncthreads();
+
+     // Phase 2: Sequential addressing reduction
+     for (unsigned int s = blockDim.x / 2; s > 0; s >>= 1) {
+         if (tid < s) {
+             sdata[tid] += sdata[tid + s];
+         }
+         __syncthreads();
+     }
+
+     // Write block result
+     if (tid == 0) {
+         partial_sums[blockIdx.x] = sdata[0];
+     }
+ }
+
+ __global__ void rms_norm_vector_w2l3_reduction_phase2(const float* input,
+                                                        float* output,
+                                                        const float* global_rms_ptr,
+                                                        int n) {
+     float rms = *global_rms_ptr;
+     int i = blockIdx.x * blockDim.x + threadIdx.x;
+
+     #pragma unroll 8
+     for (int j = 0; j < ELEMENTS_PER_THREAD_VEC; j++) {
+         if (i < n) {
+             output[i] = input[i] / rms;
+         }
+         i += gridDim.x * blockDim.x;
+     }
+ }
+
+
+ /**
+  * W2L3 Hybrid kernel: reduction5 + vectorization
+  * - Multiple elements per thread
+  * - Float4 vectorization
+  * - Unrolled reduction
+  */
+ #define ELEMENTS_PER_THREAD_VEC4 32
+ #define BLOCK_SIZE_W2L3_HYBRID 256
+
+ __global__ void rms_norm_vector_w2l3_hybrid_phase1(const float4* input,
+                                                     float* partial_sums,
+                                                     int n_vec) {
+     __shared__ float sdata[BLOCK_SIZE_W2L3_HYBRID + 1];  // +1 for bank conflict avoidance
+
+     int tid = threadIdx.x;
+     int i = blockIdx.x * blockDim.x + tid;
+
+     // Vectorized reduction with multiple elements per thread
+     float local_sum = 0.0f;
+
+     #pragma unroll 4
+     for (int j = 0; j < ELEMENTS_PER_THREAD_VEC4; j++) {
+         if (i < n_vec) {
+             float4 vals = input[i];
+             local_sum += vals.x * vals.x;
+             local_sum += vals.y * vals.y;
+             local_sum += vals.z * vals.z;
+             local_sum += vals.w * vals.w;
+         }
+         i += gridDim.x * blockDim.x;
+     }
+
+     // Store with padding
+     sdata[tid] = local_sum;
+     __syncthreads();
+
+     // Unrolled reduction (power-of-2 optimization)
+     if (BLOCK_SIZE_W2L3_HYBRID >= 512 && tid < 256) sdata[tid] += sdata[tid + 256];
+     __syncthreads();
+     if (BLOCK_SIZE_W2L3_HYBRID >= 256 && tid < 128) sdata[tid] += sdata[tid + 128];
+     __syncthreads();
+     if (BLOCK_SIZE_W2L3_HYBRID >= 128 && tid < 64) sdata[tid] += sdata[tid + 64];
+     __syncthreads();
+
+     // Warp-level reduction (no sync needed)
+     if (tid < 32) {
+         volatile float* vsdata = sdata;
+         if (BLOCK_SIZE_W2L3_HYBRID >= 64) vsdata[tid] += vsdata[tid + 32];
+         if (BLOCK_SIZE_W2L3_HYBRID >= 32) vsdata[tid] += vsdata[tid + 16];
+         if (BLOCK_SIZE_W2L3_HYBRID >= 16) vsdata[tid] += vsdata[tid + 8];
+         if (BLOCK_SIZE_W2L3_HYBRID >= 8) vsdata[tid] += vsdata[tid + 4];
+         if (BLOCK_SIZE_W2L3_HYBRID >= 4) vsdata[tid] += vsdata[tid + 2];
+         if (BLOCK_SIZE_W2L3_HYBRID >= 2) vsdata[tid] += vsdata[tid + 1];
+     }
+
+     if (tid == 0) {
+         partial_sums[blockIdx.x] = sdata[0];
+     }
+ }
+
+ __global__ void rms_norm_vector_w2l3_hybrid_phase2(const float4* input,
+                                                     float4* output,
+                                                     const float* global_rms_ptr,
+                                                     int n_vec) {
+     float rms = *global_rms_ptr;
+     int i = blockIdx.x * blockDim.x + threadIdx.x;
+
+     #pragma unroll 4
+     for (int j = 0; j < ELEMENTS_PER_THREAD_VEC4; j++) {
+         if (i < n_vec) {
+             float4 vals = input[i];
+             float4 result;
+             result.x = vals.x / rms;
+             result.y = vals.y / rms;
+             result.z = vals.z / rms;
+             result.w = vals.w / rms;
+             output[i] = result;
+         }
+         i += gridDim.x * blockDim.x;
+     }
+ }
+
+
+ /**
+  * Wrapper functions for W2L3 optimizations
+  */
+ static float* g_w2l3_partial_sums = nullptr;
+ static float* g_w2l3_global_rms = nullptr;
+ static int g_w2l3_allocated_blocks = 0;
+
+ void rms_norm_vector_w2l3_reduction(const float* d_input, float* d_output, int n) {
+     const int num_blocks = 2048;
+
+     // Reuse allocated buffers
+     if (g_w2l3_allocated_blocks != num_blocks) {
+         if (g_w2l3_partial_sums) CUDA_CHECK(cudaFree(g_w2l3_partial_sums));
+         if (g_w2l3_global_rms) CUDA_CHECK(cudaFree(g_w2l3_global_rms));
+
+         CUDA_CHECK(cudaMalloc(&g_w2l3_partial_sums, num_blocks * sizeof(float)));
+         CUDA_CHECK(cudaMalloc(&g_w2l3_global_rms, sizeof(float)));
+         g_w2l3_allocated_blocks = num_blocks;
+     }
+
+     // Phase 1: Compute partial sums
+     rms_norm_vector_w2l3_reduction_phase1<<<num_blocks, BLOCK_SIZE_W2L3_VEC>>>(
+         d_input, g_w2l3_partial_sums, n);
+     CUDA_CHECK(cudaGetLastError());
+
+     // Phase 2: GPU-side reduction
+     const int shared_mem = (BLOCK_SIZE_W2L3_VEC / 32) * sizeof(float);
+     reduce_partial_sums_gpu<<<1, BLOCK_SIZE_W2L3_VEC, shared_mem>>>(
+         g_w2l3_partial_sums, g_w2l3_global_rms, num_blocks, n);
+     CUDA_CHECK(cudaGetLastError());
+
+     // Phase 3: Normalize
+     rms_norm_vector_w2l3_reduction_phase2<<<num_blocks, BLOCK_SIZE_W2L3_VEC>>>(
+         d_input, d_output, g_w2l3_global_rms, n);
+     CUDA_CHECK(cudaGetLastError());
+ }
+
+
+ void rms_norm_vector_w2l3_hybrid(const float* d_input, float* d_output, int n) {
+     const int num_blocks = 2048;
+     const int n_vec = n / 4;
+
+     // Reuse allocated buffers
+     if (g_w2l3_allocated_blocks != num_blocks) {
+         if (g_w2l3_partial_sums) CUDA_CHECK(cudaFree(g_w2l3_partial_sums));
+         if (g_w2l3_global_rms) CUDA_CHECK(cudaFree(g_w2l3_global_rms));
+
+         CUDA_CHECK(cudaMalloc(&g_w2l3_partial_sums, num_blocks * sizeof(float)));
+         CUDA_CHECK(cudaMalloc(&g_w2l3_global_rms, sizeof(float)));
+         g_w2l3_allocated_blocks = num_blocks;
+     }
+
+     // Phase 1: Vectorized partial sums
+     rms_norm_vector_w2l3_hybrid_phase1<<<num_blocks, BLOCK_SIZE_W2L3_HYBRID>>>(
+         reinterpret_cast<const float4*>(d_input), g_w2l3_partial_sums, n_vec);
+     CUDA_CHECK(cudaGetLastError());
+
+     // Phase 2: GPU-side reduction
+     const int shared_mem = (BLOCK_SIZE_W2L3_HYBRID / 32) * sizeof(float);
+     reduce_partial_sums_gpu<<<1, BLOCK_SIZE_W2L3_HYBRID, shared_mem>>>(
+         g_w2l3_partial_sums, g_w2l3_global_rms, num_blocks, n);
+     CUDA_CHECK(cudaGetLastError());
+
+     // Phase 3: Vectorized normalize
+     rms_norm_vector_w2l3_hybrid_phase2<<<num_blocks, BLOCK_SIZE_W2L3_HYBRID>>>(
+         reinterpret_cast<const float4*>(d_input),
+         reinterpret_cast<float4*>(d_output),
+         g_w2l3_global_rms,
+         n_vec);
+     CUDA_CHECK(cudaGetLastError());
  }
  

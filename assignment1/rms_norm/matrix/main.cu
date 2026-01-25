@@ -25,6 +25,9 @@
  extern void rms_norm_matrix_basic(const float*, float*, int, int);
  extern void rms_norm_matrix_optimized(const float*, float*, int, int);
  extern void rms_norm_matrix_fast(const float*, float*, int, int);
+ extern void rms_norm_matrix_w2l3_reduction(const float*, float*, int, int);
+ extern void rms_norm_matrix_w2l3_tile(const float*, float*, int, int);
+ extern void rms_norm_matrix_w2l3_hybrid(const float*, float*, int, int);
  extern float measure_rms_norm_time(void (*)(const float*, float*, int, int),
                                     const float*, float*, int, int, int);
  extern float calculate_rms_norm_bandwidth(int, int, float);
@@ -160,11 +163,14 @@
      printf("================================================================================\n");
      printf("PERFORMANCE BENCHMARK (8192 x 8192 matrix)\n");
      printf("================================================================================\n");
- 
+ #if defined(PROFILE_NCUS)
+     const int num_iterations = 1;
+ #else
+     const int num_iterations = 100;
+ #endif
      const int rows = 8192;
      const int cols = 8192;
      const int n = rows * cols;
-     const int num_iterations = 100;
  
      printf("Matrix size: %d x %d = %d elements\n", rows, cols, n);
      printf("Memory per matrix: %.2f MB\n", (n * sizeof(float)) / (1024.0f * 1024.0f));
@@ -190,51 +196,33 @@
      CUDA_CHECK(cudaMemcpy(d_input, h_input, n * sizeof(float),
                            cudaMemcpyHostToDevice));
  
-     // Benchmark basic kernel
-     printf("Testing BASIC kernel...\n");
-     float time_basic = measure_rms_norm_time(rms_norm_matrix_basic, d_input,
-                                              d_output, rows, cols, num_iterations);
-     float bandwidth_basic = calculate_rms_norm_bandwidth(rows, cols, time_basic);
-     printf("  Execution time: %.4f ms\n", time_basic);
-     printf("  Bandwidth: %.2f GB/s\n", bandwidth_basic);
- 
-     // Benchmark optimized kernel
-     printf("\nTesting OPTIMIZED kernel...\n");
-     float time_optimized = measure_rms_norm_time(rms_norm_matrix_optimized,
-                                                  d_input, d_output, rows, cols,
-                                                  num_iterations);
-     float bandwidth_optimized = calculate_rms_norm_bandwidth(rows, cols,
-                                                              time_optimized);
-     printf("  Execution time: %.4f ms\n", time_optimized);
-     printf("  Bandwidth: %.2f GB/s\n", bandwidth_optimized);
- 
-     // Benchmark fast kernel
-     printf("\nTesting FAST kernel...\n");
-     float time_fast = measure_rms_norm_time(rms_norm_matrix_fast, d_input,
-                                             d_output, rows, cols, num_iterations);
-     float bandwidth_fast = calculate_rms_norm_bandwidth(rows, cols, time_fast);
- 
-     // Use datasheet specification for performance evaluation
-     const float peak_bandwidth_datasheet = GPU_PEAK_BANDWIDTH_DATASHEET;  // RTX 4070 Ti SUPER official spec
-     float percentage_fast = (bandwidth_fast / peak_bandwidth_datasheet) * 100.0f;
- 
-     printf("  Execution time: %.4f ms\n", time_fast);
+     // Benchmark picked kernel
+     // rms_norm_matrix_basic rms_norm_matrix_optimized rms_norm_matrix_fast 
+     // rms_norm_matrix_w2l3_reduction rms_norm_matrix_w2l3_tile rms_norm_matrix_w2l3_hybrid
+     printf("Testing RMS Norm Matrix kernel...\n");
+     void (*picked_kernel)(const float*, float*, int, int) = rms_norm_matrix_basic;
+     float time_picked = measure_rms_norm_time(picked_kernel, d_input, d_output, rows, cols, num_iterations);
+     float bandwidth_picked = calculate_rms_norm_bandwidth(rows, cols, time_picked);
+     const float peak_bandwidth_datasheet = GPU_PEAK_BANDWIDTH_DATASHEET;
+     float percentage_picked = (bandwidth_picked / peak_bandwidth_datasheet) * 100.0f;
+     printf("  Execution time: %.4f ms\n", time_picked);
      printf("  Bandwidth: %.2f GB/s (%.1f%% of peak %.2f GB/s)\n",
-            bandwidth_fast, percentage_fast, peak_bandwidth_datasheet);
+        bandwidth_picked, percentage_picked, peak_bandwidth_datasheet); 
  
+#if !defined(PROFILE_NCUS)
      // Verify correctness
-     printf("\nVerifying FAST kernel correctness...\n");
-     rms_norm_matrix_fast(d_input, d_output, rows, cols);
+     printf("\nVerifying kernel correctness...\n");
+     (*picked_kernel)(d_input, d_output, rows, cols);
      CUDA_CHECK(cudaMemcpy(h_output_cuda, d_output, n * sizeof(float),
                            cudaMemcpyDeviceToHost));
- 
+
      // Compute CPU reference for subset
      const int verify_rows = 100;
      rms_norm_cpu(h_input, h_output_cpu, verify_rows, cols);
- 
+
      bool passed = verify_rms_norm(h_output_cuda, h_output_cpu, verify_rows, cols);
      printf("✓ Verification: %s\n", passed ? "PASSED" : "FAILED");
- 
+#endif
      // Summary
      printf("\n");
      printf("================================================================================\n");
@@ -242,10 +230,9 @@
      printf("================================================================================\n");
      printf("Target bandwidth: > 300 GB/s\n");
      printf("Peak memory bandwidth (datasheet): %.2f GB/s\n", peak_bandwidth_datasheet);
-     printf("Achieved bandwidth (FAST kernel): %.2f GB/s (%.1f%% of peak)\n",
-            bandwidth_fast, percentage_fast);
-     printf("Status: %s\n", bandwidth_fast > 300.0f ? "✓ PASSED" : "✗ NEEDS OPTIMIZATION");
-     printf("Speedup over basic: %.2fx\n", time_basic / time_fast);
+     printf("Achieved bandwidth (picked kernel): %.2f GB/s (%.1f%% of peak)\n",
+            bandwidth_picked, percentage_picked);
+     printf("Status: %s\n", bandwidth_picked > 300.0f ? "✓ PASSED" : "✗ NEEDS OPTIMIZATION");
      printf("================================================================================\n");
  
      // Cleanup
@@ -276,7 +263,9 @@
             2.0 * memClockRate * (prop.memoryBusWidth / 8) / 1e6);
  
      // Run tests
+#if !defined(PROFILE_NCUS)
      test_correctness();
+#endif
      benchmark_performance();
  
      printf("\n✓ All tests complete!\n");

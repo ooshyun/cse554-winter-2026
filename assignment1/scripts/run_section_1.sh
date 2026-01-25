@@ -31,12 +31,9 @@ if [ "$RUN_QUESTION_NUMBER" -eq 2 ] || [ "$RUN_QUESTION_NUMBER" -eq 9 ]; then
 
     PROFILE_NAME="torch_silu"
     uv run python silu/silu_torch.py --profile --profile_name $PROFILE_NAME
-    nsys profile -o silu/profiling_results/$PROFILE_NAME --stats=true uv run python silu/silu_torch.py
-
-    if [ -f "silu/profiling_results/$PROFILE_NAME.sqlite" ]; then
-        rm silu/profiling_results/$PROFILE_NAME.sqlite
-    fi
-    nsys stats --report cuda_gpu_kern_sum silu/profiling_results/$PROFILE_NAME.nsys-rep
+    timestamp=$(date +%Y%m%d_%H%M%S)
+    nsys profile -o silu/profiling_results/$PROFILE_NAME_$timestamp --stats=true uv run python silu/silu_torch.py
+    nsys stats --report cuda_gpu_kern_sum silu/profiling_results/$PROFILE_NAME_$timestamp.nsys-rep
 else
     echo "Skipping Section 1-Q2."
 fi
@@ -65,13 +62,13 @@ if [ "$RUN_QUESTION_NUMBER" -eq 4 ] || [ "$RUN_QUESTION_NUMBER" -eq 9 ]; then
         echo "Error: silu_test not found"
         exit 1
     fi
-    ./silu_test
+    make run
     echo ""
 
     echo "========================================================================"
     echo "Profiling with Nsight Compute..."
     echo "========================================================================"
-    sudo make profile-ncu
+    make profile
     echo "✓ Profiling complete"
     echo ""
 

@@ -162,32 +162,13 @@ void benchmark_performance() {
     CUDA_CHECK(cudaMemcpy(d_input, h_input, n * sizeof(float),
                         cudaMemcpyHostToDevice));
 
-    // Benchmark basic kernel
-    printf("Testing BASIC kernel...\n");
-    float time_basic = measure_kernel_time(silu_cuda_basic, d_input, d_output,
-                                        n, num_iterations);
-    float bandwidth_basic = calculate_bandwidth(n, time_basic);
-    printf("  Execution time: %.4f ms\n", time_basic);
-    printf("  Bandwidth: %.2f GB/s\n", bandwidth_basic);
-
-    // // Benchmark optimized kernel
-    // printf("\nTesting OPTIMIZED kernel...\n");
-    // float time_optimized = measure_kernel_time(silu_cuda_optimized, d_input,
-    //                                         d_output, n, num_iterations);
-    // float bandwidth_optimized = calculate_bandwidth(n, time_optimized);
-    // printf("  Execution time: %.4f ms\n", time_optimized);
-    // printf("  Bandwidth: %.2f GB/s\n", bandwidth_optimized);
-
-    // // Benchmark fast kernel
-    // printf("\nTesting FAST kernel...\n");
-    // float time_fast = measure_kernel_time(silu_cuda_fast, d_input, d_output,
-    //                                     n, num_iterations);
-    // float bandwidth_fast = calculate_bandwidth(n, time_fast);
-
-    // Use datasheet specification for performance evaluation
+    // Benchmark kernel
+    // silu_cuda_basic silu_cuda_optimized silu_cuda_fast
+    printf("Testing SiLU kernel...\n");
     void (*picked_kernel)(const float*, float*, int) = silu_cuda_basic;
-    float time_picked = time_basic;
-    float bandwidth_picked = bandwidth_basic;
+    float time_picked = measure_kernel_time(picked_kernel, d_input, d_output,
+                                        n, num_iterations);
+    float bandwidth_picked = calculate_bandwidth(n, time_picked);
     const float peak_bandwidth_datasheet = GPU_PEAK_BANDWIDTH_DATASHEET;
     float percentage_picked = (bandwidth_picked / peak_bandwidth_datasheet) * 100.0f;
 
@@ -197,7 +178,7 @@ void benchmark_performance() {
 
 #if !defined(PROFILE_NCUS)
     // Verify correctness of fast kernel
-    printf("\nVerifying FAST kernel correctness...\n");
+    printf("\nVerifying kernel correctness...\n");
     (*picked_kernel)(d_input, d_output, n);
     CUDA_CHECK(cudaMemcpy(h_output_cuda, d_output, n * sizeof(float),
                         cudaMemcpyDeviceToHost));
@@ -219,7 +200,6 @@ void benchmark_performance() {
     printf("Achieved bandwidth (picked kernel): %.2f GB/s (%.1f%% of peak)\n",
         bandwidth_picked, percentage_picked);
     printf("Status: %s\n", bandwidth_picked > 500.0f ? "✓ PASSED" : "✗ NEEDS OPTIMIZATION");
-    printf("Speedup over basic: %.2fx\n", time_basic / time_picked);
     printf("================================================================================\n");
 
     // Cleanup

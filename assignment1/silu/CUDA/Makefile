@@ -41,12 +41,12 @@ PROFILE_TARGET = $(TARGET)_profile
 run: $(TARGET)
 	./$(TARGET)
 
-NCU = /usr/local/cuda-12.4/bin/ncu
-# Profile with Nsight Compute
-# nsys profile -o ../profiling_results/cuda_silu ./$(TARGET)
-profile-ncu: $(PROFILE_TARGET)
+# Profile
+profile: $(PROFILE_TARGET)
 	@timestamp=$$(date +%Y%m%d_%H%M%S); \
-	$(NCU) -o ../profiling_results/cuda_silu_$$timestamp --set full ./$(PROFILE_TARGET)
+	nsys profile -o ../profiling_results/cuda_silu_$$timestamp ./$(PROFILE_TARGET)
+	@timestamp=$$(date +%Y%m%d_%H%M%S); \
+	ncu -o ../profiling_results/cuda_silu_$$timestamp --set full ./$(PROFILE_TARGET)
 
 # Build profile target
 $(PROFILE_TARGET): $(PROFILE_OBJECTS)

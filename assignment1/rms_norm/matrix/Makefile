@@ -8,6 +8,9 @@ TARGET = rms_norm_matrix_test
 SOURCES = main.cu rms_norm_matrix.cu
 OBJECTS = $(SOURCES:.cu=.o)
 
+# FLAG for Nsight Compute profiling
+PROFILE_FLAGS = -DPROFILE_NCUS
+
 all: $(TARGET)
 
 $(TARGET): $(OBJECTS)
@@ -16,15 +19,29 @@ $(TARGET): $(OBJECTS)
 %.o: %.cu
 	$(NVCC) $(NVCC_FLAGS) -c $< -o $@
 
+# Compile source files with profiling flags
+%.profile.o: %.cu
+	$(NVCC) $(NVCC_FLAGS) $(PROFILE_FLAGS) -c $< -o $@
+
+# Profile object files
+PROFILE_OBJECTS = $(SOURCES:.cu=.profile.o)
+
+# Profile target executable
+PROFILE_TARGET = $(TARGET)_profile
+
 run: $(TARGET)
 	./$(TARGET)
 
-profile: $(TARGET)
+profile: $(PROFILE_TARGET)
 	mkdir -p profiling_results
 	@timestamp=$$(date +%Y%m%d_%H%M%S); \
-	nsys profile -o profiling_results/rms_norm_matrix_$$timestamp ./$(TARGET)
+	nsys profile -o profiling_results/rms_norm_matrix_$$timestamp ./$(PROFILE_TARGET)
 	@timestamp=$$(date +%Y%m%d_%H%M%S); \
-	ncu -o profiling_results/rms_norm_matrix_$$timestamp --set full ./$(TARGET)
+	ncu -o profiling_results/rms_norm_matrix_$$timestamp --set full ./$(PROFILE_TARGET)
+
+# Build profile target
+$(PROFILE_TARGET): $(PROFILE_OBJECTS)
+	$(NVCC) $(NVCC_FLAGS) $(PROFILE_FLAGS) -o $@ $^
 
 clean:
 	rm -f $(OBJECTS) $(TARGET)

@@ -192,8 +192,244 @@
          row_output[col] = row_input[col] / rms;
      }
  }
- 
- 
+
+
+ /**
+  * W2L3-inspired RMS Norm kernel with reduction5 optimization
+  * Key features from reduction5.cu:
+  * - Multiple elements per thread (ELEMENTS_PER_THREAD = 32)
+  * - Each thread processes elements with stride = blockDim.x
+  * - Sequential addressing in shared memory reduction
+  */
+ #define ELEMENTS_PER_THREAD 32
+ #define BLOCK_SIZE_W2L3 256
+
+ __global__ void rms_norm_kernel_w2l3_reduction(const float* input, float* output,
+                                                 int rows, int cols) {
+     __shared__ float sdata[BLOCK_SIZE_W2L3];
+
+     int row = blockIdx.x;
+     int tid = threadIdx.x;
+
+     if (row >= rows) return;
+
+     const float* row_input = input + row * cols;
+     float* row_output = output + row * cols;
+
+     // Phase 1: Each thread computes local sum of squares for multiple elements
+     // Similar to reduction5.cu lines 14-19
+     float local_sum = 0.0f;
+     int i = tid;
+
+     #pragma unroll 8
+     for (int j = 0; j < ELEMENTS_PER_THREAD; j++) {
+         if (i < cols) {
+             float val = row_input[i];
+             local_sum += val * val;
+         }
+         i += blockDim.x;
+     }
+
+     // Store local sum in shared memory
+     sdata[tid] = local_sum;
+     __syncthreads();
+
+     // Phase 2: Reduction in shared memory (sequential addressing)
+     // Similar to reduction5.cu lines 24-29
+     for (unsigned int s = blockDim.x / 2; s > 0; s >>= 1) {
+         if (tid < s) {
+             sdata[tid] += sdata[tid + s];
+         }
+         __syncthreads();
+     }
+
+     // Calculate RMS
+     __shared__ float rms;
+     if (tid == 0) {
+         float sum_sq = sdata[0];
+         rms = sqrtf(sum_sq / cols + EPSILON);
+     }
+     __syncthreads();
+
+     // Phase 3: Normalize - each thread handles multiple elements
+     i = tid;
+     #pragma unroll 8
+     for (int j = 0; j < ELEMENTS_PER_THREAD; j++) {
+         if (i < cols) {
+             row_output[i] = row_input[i] / rms;
+         }
+         i += blockDim.x;
+     }
+ }
+
+
+ /**
+  * W2L3-inspired RMS Norm kernel with transpose_v5 tile optimization
+  * Key features from transpose_v5.cu:
+  * - Large tile size (128 elements)
+  * - Bank conflict avoidance with padding
+  * - Extended shared memory usage
+  */
+ #define TILE_SIZE 128
+ #define TILE_SIZE_PAD 129  // +1 for bank conflict avoidance (like transpose_v5 line 6)
+
+ __global__ void rms_norm_kernel_w2l3_tile(const float* input, float* output,
+                                            int rows, int cols) {
+     // Padded shared memory to avoid bank conflicts (like transpose_v5 line 9)
+     __shared__ float tile[TILE_SIZE_PAD];
+     __shared__ float sdata[TILE_SIZE];
+
+     int row = blockIdx.x;
+     int tid = threadIdx.x;
+
+     if (row >= rows) return;
+
+     const float* row_input = input + row * cols;
+     float* row_output = output + row * cols;
+
+     // Phase 1: Process tiles and accumulate sum of squares
+     float sum_sq = 0.0f;
+
+     for (int base = 0; base < cols; base += TILE_SIZE) {
+         // Load tile to shared memory with padding (similar to transpose_v5 line 13)
+         if (base + tid < cols) {
+             float val = row_input[base + tid];
+             tile[tid] = val;
+             sum_sq += val * val;
+         } else {
+             tile[tid] = 0.0f;
+         }
+         __syncthreads();
+     }
+
+     // Store accumulated sum in reduction array
+     sdata[tid] = sum_sq;
+     __syncthreads();
+
+     // Reduction in shared memory
+     for (unsigned int s = TILE_SIZE / 2; s > 0; s >>= 1) {
+         if (tid < s) {
+             sdata[tid] += sdata[tid + s];
+         }
+         __syncthreads();
+     }
+
+     // Calculate RMS
+     __shared__ float rms;
+     if (tid == 0) {
+         rms = sqrtf(sdata[0] / cols + EPSILON);
+     }
+     __syncthreads();
+
+     // Phase 2: Normalize in tiles
+     for (int base = 0; base < cols; base += TILE_SIZE) {
+         if (base + tid < cols) {
+             row_output[base + tid] = row_input[base + tid] / rms;
+         }
+     }
+ }
+
+
+ /**
+  * Combined W2L3 optimizations: reduction5 + transpose_v5 hybrid
+  * - Multiple elements per thread (reduction5)
+  * - Vectorized loads (float4 for memory bandwidth)
+  * - Bank conflict avoidance (transpose_v5)
+  * - Unrolled loops for better performance
+  */
+ #define BLOCK_SIZE_HYBRID 256
+ #define ELEMENTS_PER_THREAD_VEC 16
+
+ __global__ void rms_norm_kernel_w2l3_hybrid(const float* input, float* output,
+                                              int rows, int cols) {
+     __shared__ float sdata[BLOCK_SIZE_HYBRID + 1];  // +1 for bank conflict avoidance
+
+     int row = blockIdx.x;
+     int tid = threadIdx.x;
+
+     if (row >= rows) return;
+
+     const float* row_input = input + row * cols;
+     float* row_output = output + row * cols;
+
+     // Phase 1: Vectorized reduction with multiple elements per thread
+     float local_sum = 0.0f;
+
+     // Process using float4 for better memory bandwidth
+     int vec_cols = cols / 4;
+     int i = tid;
+
+     #pragma unroll 4
+     for (int j = 0; j < ELEMENTS_PER_THREAD_VEC; j++) {
+         if (i < vec_cols) {
+             float4 vals = reinterpret_cast<const float4*>(row_input)[i];
+             local_sum += vals.x * vals.x;
+             local_sum += vals.y * vals.y;
+             local_sum += vals.z * vals.z;
+             local_sum += vals.w * vals.w;
+         }
+         i += blockDim.x;
+     }
+
+     // Handle remaining elements
+     for (int idx = vec_cols * 4 + tid; idx < cols; idx += blockDim.x) {
+         float val = row_input[idx];
+         local_sum += val * val;
+     }
+
+     // Store in shared memory with padding
+     sdata[tid] = local_sum;
+     __syncthreads();
+
+     // Phase 2: Optimized reduction (unrolled for power-of-2 sizes)
+     if (BLOCK_SIZE_HYBRID >= 512 && tid < 256) sdata[tid] += sdata[tid + 256];
+     __syncthreads();
+     if (BLOCK_SIZE_HYBRID >= 256 && tid < 128) sdata[tid] += sdata[tid + 128];
+     __syncthreads();
+     if (BLOCK_SIZE_HYBRID >= 128 && tid < 64) sdata[tid] += sdata[tid + 64];
+     __syncthreads();
+
+     // Warp-level reduction (no sync needed within warp)
+     if (tid < 32) {
+         volatile float* vsdata = sdata;
+         if (BLOCK_SIZE_HYBRID >= 64) vsdata[tid] += vsdata[tid + 32];
+         if (BLOCK_SIZE_HYBRID >= 32) vsdata[tid] += vsdata[tid + 16];
+         if (BLOCK_SIZE_HYBRID >= 16) vsdata[tid] += vsdata[tid + 8];
+         if (BLOCK_SIZE_HYBRID >= 8) vsdata[tid] += vsdata[tid + 4];
+         if (BLOCK_SIZE_HYBRID >= 4) vsdata[tid] += vsdata[tid + 2];
+         if (BLOCK_SIZE_HYBRID >= 2) vsdata[tid] += vsdata[tid + 1];
+     }
+
+     // Calculate RMS
+     __shared__ float rms;
+     if (tid == 0) {
+         rms = sqrtf(sdata[0] / cols + EPSILON);
+     }
+     __syncthreads();
+
+     // Phase 3: Vectorized normalization
+     i = tid;
+     #pragma unroll 4
+     for (int j = 0; j < ELEMENTS_PER_THREAD_VEC; j++) {
+         if (i < vec_cols) {
+             float4 vals = reinterpret_cast<const float4*>(row_input)[i];
+             float4 result;
+             result.x = vals.x / rms;
+             result.y = vals.y / rms;
+             result.z = vals.z / rms;
+             result.w = vals.w / rms;
+             reinterpret_cast<float4*>(row_output)[i] = result;
+         }
+         i += blockDim.x;
+     }
+
+     // Handle remaining elements
+     for (int idx = vec_cols * 4 + tid; idx < cols; idx += blockDim.x) {
+         row_output[idx] = row_input[idx] / rms;
+     }
+ }
+
+
  /**
   * Wrapper functions
   */
@@ -201,7 +437,7 @@
                             int rows, int cols) {
      int block_size = 256;
      int grid_size = (rows + block_size - 1) / block_size;
- 
+
      rms_norm_kernel_basic<<<grid_size, block_size>>>(d_input, d_output,
                                                        rows, cols);
      CUDA_CHECK(cudaGetLastError());
@@ -225,8 +461,38 @@
      int block_size = 256;
      int grid_size = rows;
      int shared_mem = (block_size / 32) * sizeof(float);
- 
+
      rms_norm_kernel_fast<<<grid_size, block_size, shared_mem>>>(
+         d_input, d_output, rows, cols);
+     CUDA_CHECK(cudaGetLastError());
+ }
+
+
+ void rms_norm_matrix_w2l3_reduction(const float* d_input, float* d_output,
+                                      int rows, int cols) {
+     int grid_size = rows;
+
+     rms_norm_kernel_w2l3_reduction<<<grid_size, BLOCK_SIZE_W2L3>>>(
+         d_input, d_output, rows, cols);
+     CUDA_CHECK(cudaGetLastError());
+ }
+
+
+ void rms_norm_matrix_w2l3_tile(const float* d_input, float* d_output,
+                                 int rows, int cols) {
+     int grid_size = rows;
+
+     rms_norm_kernel_w2l3_tile<<<grid_size, TILE_SIZE>>>(
+         d_input, d_output, rows, cols);
+     CUDA_CHECK(cudaGetLastError());
+ }
+
+
+ void rms_norm_matrix_w2l3_hybrid(const float* d_input, float* d_output,
+                                   int rows, int cols) {
+     int grid_size = rows;
+
+     rms_norm_kernel_w2l3_hybrid<<<grid_size, BLOCK_SIZE_HYBRID>>>(
          d_input, d_output, rows, cols);
      CUDA_CHECK(cudaGetLastError());
  }
