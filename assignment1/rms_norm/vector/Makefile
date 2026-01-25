@@ -38,10 +38,10 @@ run: $(TARGET)
 
 profile: $(PROFILE_TARGET)
 	mkdir -p profiling_results
+# @timestamp=$$(date +%Y%m%d_%H%M%S); \
+# nsys profile -o profiling_results/rms_norm_vector_$$timestamp ./$(PROFILE_TARGET)
 	@timestamp=$$(date +%Y%m%d_%H%M%S); \
-	nsys profile -o profiling_results/rms_norm_matrix_$$timestamp ./$(PROFILE_TARGET)
-	@timestamp=$$(date +%Y%m%d_%H%M%S); \
-	ncu -o profiling_results/rms_norm_matrix_$$timestamp --set full ./$(PROFILE_TARGET)
+	ncu -o profiling_results/rms_norm_vector_$$timestamp --set full ./$(PROFILE_TARGET)
 
 # Build profile target
 $(PROFILE_TARGET): $(PROFILE_OBJECTS)

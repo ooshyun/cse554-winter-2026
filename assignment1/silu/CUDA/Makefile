@@ -43,8 +43,8 @@ run: $(TARGET)
 
 # Profile
 profile: $(PROFILE_TARGET)
-	@timestamp=$$(date +%Y%m%d_%H%M%S); \
-	nsys profile -o ../profiling_results/cuda_silu_$$timestamp ./$(PROFILE_TARGET)
+# @timestamp=$$(date +%Y%m%d_%H%M%S); \
+# nsys profile -o ../profiling_results/cuda_silu_$$timestamp ./$(PROFILE_TARGET)
 	@timestamp=$$(date +%Y%m%d_%H%M%S); \
 	ncu -o ../profiling_results/cuda_silu_$$timestamp --set full ./$(PROFILE_TARGET)
 
