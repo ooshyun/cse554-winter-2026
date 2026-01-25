@@ -241,12 +241,15 @@ int main() {
     CUDA_CHECK(cudaSetDevice(device));  // Initialize CUDA runtime explicitly
     CUDA_CHECK(cudaGetDeviceProperties(&prop, device));
 
+    int memClockRate;
+    cudaDeviceGetAttribute(&memClockRate, cudaDevAttrMemoryClockRate, device);
+
     printf("GPU: %s\n", prop.name);
     printf("Compute Capability: %d.%d\n", prop.major, prop.minor);
-    printf("Memory Clock Rate: %.2f GHz\n", prop.memoryClockRate / 1e6);
+    printf("Memory Clock Rate: %.2f GHz\n", memClockRate / 1e6);
     printf("Memory Bus Width: %d bits\n", prop.memoryBusWidth);
     printf("Peak Memory Bandwidth: %.2f GB/s\n",
-        2.0 * prop.memoryClockRate * (prop.memoryBusWidth / 8) / 1e6);
+        2.0 * memClockRate * (prop.memoryBusWidth / 8) / 1e6);
 
     // Run tests
 #if !defined(PROFILE_NCUS)

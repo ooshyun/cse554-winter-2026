@@ -20,22 +20,16 @@ run: $(TARGET)
 	./$(TARGET)
 
 profile: $(TARGET)
-	@echo "⚠️  Nsight Compute profiling requires GPU perf counter permissions (root access)"
-	@echo "   ncu can interfere with CUDA initialization causing runtime errors"
-	@echo ""
-	@echo "✓ Using Nsight Systems profile instead: profiling_results/rms_norm_matrix.nsys-rep"
-	@echo "   View with: nsys-ui ../../../../profiling_results/rms_norm_matrix.nsys-rep"
-	@echo ""
-	@echo "ℹ️  To profile with ncu manually (requires sudo):"
-	@echo "   sudo ncu -o ../../../../profiling_results/rms_norm_matrix --set full ./$(TARGET)"
-
-profile-nsys: $(TARGET)
-	nsys profile -o ../../../../profiling_results/rms_norm_matrix ./$(TARGET)
+	mkdir -p profiling_results
+	@timestamp=$$(date +%Y%m%d_%H%M%S); \
+	nsys profile -o profiling_results/rms_norm_matrix_$$timestamp ./$(TARGET)
+	@timestamp=$$(date +%Y%m%d_%H%M%S); \
+	ncu -o profiling_results/rms_norm_matrix_$$timestamp --set full ./$(TARGET)
 
 clean:
 	rm -f $(OBJECTS) $(TARGET)
 
 cleanall: clean
-	rm -f ../../../../profiling_results/rms_norm_matrix.*
+	rm -f profiling_results/rms_norm_matrix.*
 
 .PHONY: all run profile profile-nsys clean cleanall

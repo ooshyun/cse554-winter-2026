@@ -266,11 +266,14 @@
      cudaDeviceProp prop;
      CUDA_CHECK(cudaGetDevice(&device));
      CUDA_CHECK(cudaGetDeviceProperties(&prop, device));
- 
+
+     int memClockRate;
+     cudaDeviceGetAttribute(&memClockRate, cudaDevAttrMemoryClockRate, device);
+
      printf("GPU: %s\n", prop.name);
      printf("Compute Capability: %d.%d\n", prop.major, prop.minor);
      printf("Peak Memory Bandwidth: %.2f GB/s\n",
-            2.0 * prop.memoryClockRate * (prop.memoryBusWidth / 8) / 1e6);
+            2.0 * memClockRate * (prop.memoryBusWidth / 8) / 1e6);
  
      // Run tests
      test_correctness();

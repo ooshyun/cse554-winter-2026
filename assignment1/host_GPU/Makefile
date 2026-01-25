@@ -26,13 +26,17 @@ run-copy: $(FIRST_COLUMN)
 
 # Profile first column copy with Nsight Systems
 profile-copy: $(FIRST_COLUMN)
-	nsys profile -o ../../../profiling_results/copy ./$(FIRST_COLUMN)
+	mkdir -p profiling_results/copy
+	@timestamp=$$(date +%Y%m%d_%H%M%S); \
+	nsys profile -o profiling_results/copy_$$timestamp ./$(FIRST_COLUMN)
+	@timestamp=$$(date +%Y%m%d_%H%M%S); \
+	ncu -o profiling_results/copy_$$timestamp --set full ./$(FIRST_COLUMN)
 
 clean:
 	rm -f $(MEMORY_TRANSFER) $(FIRST_COLUMN)
 	rm -f bandwidth_data.csv
 
 cleanall: clean
-	rm -f ../../../profiling_results/copy.*
+	rm -f profiling_results/copy.*
 
 .PHONY: all run-memory run-copy profile-copy clean cleanall
