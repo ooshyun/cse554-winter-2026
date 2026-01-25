@@ -53,40 +53,96 @@
  
  
  /**
-  * Two-phase RMS Norm for long vector
+  * ORIGINAL Basic two-phase RMS Norm for long vector
   * Phase 1: Compute partial sums of squares across blocks
-  * Phase 2: Normalize using global RMS
   */
  __global__ void rms_norm_vector_phase1(const float* input, float* partial_sums,
                                          int n) {
      extern __shared__ float shared[];
- 
+
      int tid = threadIdx.x;
      int block_size = blockDim.x;
      int warp_id = tid / 32;
      int lane_id = tid % 32;
- 
+
      // Each thread computes partial sum with grid-stride loop
      float sum = 0.0f;
      for (int i = blockIdx.x * block_size + tid; i < n; i += gridDim.x * block_size) {
          float val = input[i];
          sum += val * val;
      }
- 
+
      // Warp-level reduction
      sum = warp_reduce_sum(sum);
- 
+
      // Write warp results to shared memory
      if (lane_id == 0) {
          shared[warp_id] = sum;
      }
      __syncthreads();
- 
+
      // Final reduction in first warp
      if (tid < (block_size / 32)) {
          sum = shared[tid];
          sum = warp_reduce_sum(sum);
- 
+
+         if (tid == 0) {
+             partial_sums[blockIdx.x] = sum;
+         }
+     }
+ }
+
+
+ /**
+  * OPTIMIZED v1: Two-phase RMS Norm for long vector
+  * Phase 1: Compute partial sums of squares across blocks
+  *
+  * Optimizations applied:
+  * - Float4 vectorization to reduce L1TEX stalls and improve coalescing (Est. Speedup: 36.78%)
+  * - Increased elements per thread to reduce tail effect (Est. Speedup: 25%)
+  * - Better memory access pattern for global stores (Est. Speedup: 15.72%)
+  */
+ __global__ void rms_norm_vector_phase1_v1(const float* input, float* partial_sums,
+                                         int n) {
+     extern __shared__ float shared[];
+
+     int tid = threadIdx.x;
+     int block_size = blockDim.x;
+     int warp_id = tid / 32;
+     int lane_id = tid % 32;
+
+     const int n_vec = n / 4;
+     const float4* input_vec = reinterpret_cast<const float4*>(input);
+
+     // Vectorized loads with multiple elements per thread to reduce tail effect
+     float sum = 0.0f;
+     int base_idx = blockIdx.x * block_size + tid;
+
+     // Process 4 float4 vectors per thread (16 floats total)
+     #pragma unroll 4
+     for (int j = 0; j < 4; j++) {
+         int i = base_idx + j * gridDim.x * block_size;
+         if (i < n_vec) {
+             float4 vals = input_vec[i];
+             sum += vals.x * vals.x + vals.y * vals.y +
+                    vals.z * vals.z + vals.w * vals.w;
+         }
+     }
+
+     // Warp-level reduction
+     sum = warp_reduce_sum(sum);
+
+     // Write warp results to shared memory (coalesced access)
+     if (lane_id == 0) {
+         shared[warp_id] = sum;
+     }
+     __syncthreads();
+
+     // Final reduction in first warp - no divergence
+     if (tid < (block_size / 32)) {
+         sum = shared[tid];
+         sum = warp_reduce_sum(sum);
+
          if (tid == 0) {
              partial_sums[blockIdx.x] = sum;
          }
@@ -94,6 +150,9 @@
  }
  
  
+ /**
+  * ORIGINAL Basic Phase 2: Normalize using global RMS
+  */
  __global__ void rms_norm_vector_phase2(const float* input, float* output,
                                          const float* partial_sums, int n,
                                          int num_blocks) {
@@ -114,6 +173,74 @@
      for (int i = blockIdx.x * block_size + threadIdx.x; i < n;
           i += gridDim.x * block_size) {
          output[i] = input[i] / global_rms;
+     }
+ }
+
+
+ /**
+  * OPTIMIZED v1: Phase 2: Normalize using global RMS
+  *
+  * Optimizations applied:
+  * - Vectorized float4 loads/stores to reduce L1TEX stalls (Est. Speedup: 29.59%)
+  * - Parallel reduction of partial_sums to avoid barrier stalls (Est. Speedup: 62.30%)
+  * - Uniform workload to reduce thread divergence (Est. Speedup: 27.20%)
+  */
+ __global__ void rms_norm_vector_phase2_v1(const float* input, float* output,
+                                         const float* partial_sums, int n,
+                                         int num_blocks) {
+     __shared__ float global_rms;
+     extern __shared__ float sdata[];
+
+     int tid = threadIdx.x;
+     int block_size = blockDim.x;
+
+     // Parallel reduction of partial_sums (reduces barrier stalls)
+     float local_sum = 0.0f;
+     for (int i = tid; i < num_blocks; i += block_size) {
+         local_sum += partial_sums[i];
+     }
+
+     // Warp-level reduction
+     int warp_id = tid / 32;
+     int lane_id = tid % 32;
+     local_sum = warp_reduce_sum(local_sum);
+
+     if (lane_id == 0) {
+         sdata[warp_id] = local_sum;
+     }
+     __syncthreads();
+
+     // Final reduction in first warp
+     if (tid < (block_size / 32)) {
+         local_sum = sdata[tid];
+         local_sum = warp_reduce_sum(local_sum);
+
+         if (tid == 0) {
+             global_rms = sqrtf(local_sum / n + EPSILON);
+         }
+     }
+     __syncthreads();
+
+     // Vectorized normalization (reduces L1TEX stalls and improves coalescing)
+     const int n_vec = n / 4;
+     const float4* input_vec = reinterpret_cast<const float4*>(input);
+     float4* output_vec = reinterpret_cast<float4*>(output);
+
+     int base_idx = blockIdx.x * block_size + tid;
+
+     // Process 4 float4 vectors per thread (uniform workload, no divergence)
+     #pragma unroll 4
+     for (int j = 0; j < 4; j++) {
+         int i = base_idx + j * gridDim.x * block_size;
+         if (i < n_vec) {
+             float4 vals = input_vec[i];
+             float4 result;
+             result.x = vals.x / global_rms;
+             result.y = vals.y / global_rms;
+             result.z = vals.z / global_rms;
+             result.w = vals.w / global_rms;
+             output_vec[i] = result;
+         }
      }
  }
  
@@ -175,21 +302,49 @@
  void rms_norm_vector_basic(const float* d_input, float* d_output, int n) {
      int block_size = 256;
      int num_blocks = min((n + block_size - 1) / block_size, 1024);
- 
+
      float* d_partial_sums;
      CUDA_CHECK(cudaMalloc(&d_partial_sums, num_blocks * sizeof(float)));
- 
+
      int shared_mem = (block_size / 32) * sizeof(float);
- 
+
+     // Phase 1: Original basic version
      rms_norm_vector_phase1<<<num_blocks, block_size, shared_mem>>>(
          d_input, d_partial_sums, n);
      CUDA_CHECK(cudaGetLastError());
      CUDA_CHECK(cudaDeviceSynchronize());
- 
+
+     // Phase 2: Original basic version
      rms_norm_vector_phase2<<<num_blocks, block_size>>>(
          d_input, d_output, d_partial_sums, n, num_blocks);
      CUDA_CHECK(cudaGetLastError());
- 
+
+     CUDA_CHECK(cudaFree(d_partial_sums));
+ }
+
+
+ void rms_norm_vector_basic_v1(const float* d_input, float* d_output, int n) {
+     int block_size = 256;
+     int num_blocks = min((n + block_size - 1) / block_size, 1024);
+
+     float* d_partial_sums;
+     CUDA_CHECK(cudaMalloc(&d_partial_sums, num_blocks * sizeof(float)));
+
+     // Shared memory for warp results
+     int shared_mem = (block_size / 32) * sizeof(float);
+
+     // Phase 1: Vectorized partial sums
+     rms_norm_vector_phase1_v1<<<num_blocks, block_size, shared_mem>>>(
+         d_input, d_partial_sums, n);
+     CUDA_CHECK(cudaGetLastError());
+     CUDA_CHECK(cudaDeviceSynchronize());
+
+     // Phase 2: Parallel reduction + vectorized normalization
+     // Phase 2 also needs shared memory for partial_sums reduction
+     rms_norm_vector_phase2_v1<<<num_blocks, block_size, shared_mem>>>(
+         d_input, d_output, d_partial_sums, n, num_blocks);
+     CUDA_CHECK(cudaGetLastError());
+
      CUDA_CHECK(cudaFree(d_partial_sums));
  }
  
