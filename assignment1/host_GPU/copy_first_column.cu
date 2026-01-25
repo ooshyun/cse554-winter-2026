@@ -263,13 +263,26 @@ float copy_first_column_ultra(float* h_pinned_matrix, float* d_column,
 }
 
 
+// Picked kernel: copy_first_column_ultra (requires pre-allocated pinned memory)
+// Function pointer type for copy functions
+typedef float (*CopyFirstColumnFunc)(const float*, float*, int, int);
+typedef float (*CopyFirstColumnUltraFunc)(float*, float*, int, int);
+
+CopyFirstColumnUltraFunc picked_kernel = copy_first_column_ultra;
+
 int main() {
     printf("CSE 554 Assignment 1 - Section 3 Q3: First Column Copy\n");
     printf("================================================================================\n");
 
     const int rows = 8192;
     const int cols = 65536;
+#if defined(PROFILE_NCUS)
+    const int num_iterations = 1;
+    printf("[PROFILE MODE ENABLED]\n");
+#else
     const int num_iterations = 100;
+    printf("[NORMAL MODE]\n");
+#endif
 
     printf("Matrix size: %d x %d\n", rows, cols);
     printf("First column size: %d elements = %.2f KB\n",
@@ -292,74 +305,28 @@ int main() {
     float* d_column;
     CUDA_CHECK(cudaMalloc(&d_column, rows * sizeof(float)));
 
-    // Test 1: Naive approach
-    printf("\n");
-    printf("================================================================================\n");
-    printf("Test 1: Naive Approach (CPU extract + memcpy)\n");
-    printf("================================================================================\n");
-
-    float total_time_naive = 0.0f;
-    for (int i = 0; i < num_iterations; i++) {
-        total_time_naive += copy_first_column_naive(h_matrix, d_column, rows, cols);
-    }
-    float avg_time_naive = total_time_naive / num_iterations;
-    printf("Average time: %.2f μs\n", avg_time_naive * 1000.0f);
-    printf("Status: %s\n", avg_time_naive * 1000.0f < 100.0f ? "✓ PASSED" : "✗ FAILED");
-
-    // Test 2: cudaMemcpy2D
-    printf("\n");
-    printf("================================================================================\n");
-    printf("Test 2: cudaMemcpy2D (Strided copy)\n");
-    printf("================================================================================\n");
-
-    float total_time_memcpy2d = 0.0f;
-    for (int i = 0; i < num_iterations; i++) {
-        total_time_memcpy2d += copy_first_column_memcpy2d(h_matrix, d_column,
-                                                        rows, cols);
-    }
-    float avg_time_memcpy2d = total_time_memcpy2d / num_iterations;
-    printf("Average time: %.2f μs\n", avg_time_memcpy2d * 1000.0f);
-    printf("Speedup over naive: %.2fx\n", avg_time_naive / avg_time_memcpy2d);
-    printf("Status: %s\n", avg_time_memcpy2d * 1000.0f < 100.0f ? "✓ PASSED" : "✗ FAILED");
-
-    // Test 3: Pinned memory + cudaMemcpy2D
-    printf("\n");
-    printf("================================================================================\n");
-    printf("Test 3: Pinned Memory + cudaMemcpy2D\n");
-    printf("================================================================================\n");
-
-    float total_time_optimized = 0.0f;
-    for (int i = 0; i < num_iterations; i++) {
-        total_time_optimized += copy_first_column_optimized(h_matrix, d_column,
-                                                            rows, cols);
-    }
-    float avg_time_optimized = total_time_optimized / num_iterations;
-    printf("Average time: %.2f μs\n", avg_time_optimized * 1000.0f);
-    printf("Speedup over naive: %.2fx\n", avg_time_naive / avg_time_optimized);
-    printf("Status: %s\n", avg_time_optimized * 1000.0f < 100.0f ? "✓ PASSED" : "✗ FAILED");
-
-    // Test 4: Ultra-optimized (pre-allocated pinned + async)
-    printf("\n");
-    printf("================================================================================\n");
-    printf("Test 4: Ultra-Optimized (Pre-allocated pinned + async)\n");
-    printf("================================================================================\n");
-
-    // Allocate pinned memory once
+    // Allocate pinned memory for picked kernel
     float* h_pinned;
     CUDA_CHECK(cudaMallocHost(&h_pinned, matrix_size));
     memcpy(h_pinned, h_matrix, matrix_size);
 
-    float total_time_ultra = 0.0f;
+    // Test picked kernel
+    printf("\n");
+    printf("================================================================================\n");
+    printf("Testing Picked Kernel\n");
+    printf("================================================================================\n");
+
+    float total_time_picked = 0.0f;
     for (int i = 0; i < num_iterations; i++) {
-        total_time_ultra += copy_first_column_ultra(h_pinned, d_column, rows, cols);
+        total_time_picked += (*picked_kernel)(h_pinned, d_column, rows, cols);
     }
-    float avg_time_ultra = total_time_ultra / num_iterations;
-    printf("Average time: %.2f μs\n", avg_time_ultra * 1000.0f);
-    printf("Speedup over naive: %.2fx\n", avg_time_naive / avg_time_ultra);
-    printf("Status: %s\n", avg_time_ultra * 1000.0f < 100.0f ? "✓ PASSED" : "✗ FAILED");
+    float avg_time_picked = total_time_picked / num_iterations;
+    printf("Average time: %.2f μs\n", avg_time_picked * 1000.0f);
+    printf("Status: %s\n", avg_time_picked * 1000.0f < 100.0f ? "✓ PASSED" : "✗ FAILED");
 
     CUDA_CHECK(cudaFreeHost(h_pinned));
 
+#if !defined(PROFILE_NCUS)
     // Verify correctness
     printf("\n");
     printf("================================================================================\n");
@@ -389,32 +356,16 @@ int main() {
     printf("SUMMARY\n");
     printf("================================================================================\n");
     printf("Target: < 100 μs\n");
-    printf("\n");
-    printf("Method                          | Time (μs) | Status\n");
-    printf("-----------------------------------------------------------\n");
-    printf("Naive                           | %8.2f  | %s\n",
-        avg_time_naive * 1000.0f,
-        avg_time_naive * 1000.0f < 100.0f ? "✓" : "✗");
-    printf("cudaMemcpy2D                    | %8.2f  | %s\n",
-        avg_time_memcpy2d * 1000.0f,
-        avg_time_memcpy2d * 1000.0f < 100.0f ? "✓" : "✗");
-    printf("Pinned + cudaMemcpy2D           | %8.2f  | %s\n",
-        avg_time_optimized * 1000.0f,
-        avg_time_optimized * 1000.0f < 100.0f ? "✓" : "✗");
-    printf("Ultra (pinned + async)          | %8.2f  | %s\n",
-        avg_time_ultra * 1000.0f,
-        avg_time_ultra * 1000.0f < 100.0f ? "✓" : "✗");
+    printf("Picked kernel (Ultra-optimized): %.2f μs\n", avg_time_picked * 1000.0f);
+    printf("Status: %s\n", avg_time_picked * 1000.0f < 100.0f ? "✓ PASSED" : "✗ FAILED");
     printf("================================================================================\n");
-
-    printf("\nBest method: Ultra-optimized (%.2f μs)\n", avg_time_ultra * 1000.0f);
-
     // Cleanup
-    free(h_matrix);
     free(h_result);
+#endif
+
+    free(h_matrix);
     CUDA_CHECK(cudaFree(d_column));
 
     printf("\n✓ First column copy tests complete!\n");
-    printf("  Run Nsight Systems: nsys profile -o profiling_results/copy ./copy_first_column_test\n");
-
     return 0;
 }

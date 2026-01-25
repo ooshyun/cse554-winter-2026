@@ -44,7 +44,7 @@ $(PROFILE_TARGET): $(PROFILE_OBJECTS)
 	$(NVCC) $(NVCC_FLAGS) $(PROFILE_FLAGS) -o $@ $^ $(LINK_FLAGS)
 
 clean:
-	rm -f $(OBJECTS) $(TARGET)
+	rm -f $(OBJECTS) $(TARGET) $(PROFILE_OBJECTS) $(PROFILE_TARGET)
 
 cleanall: clean
 	rm -f profiling_results/rms_norm_matrix.*
