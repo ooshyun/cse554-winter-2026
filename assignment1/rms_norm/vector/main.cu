@@ -24,16 +24,12 @@
 // Function declarations
 extern void rms_norm_vector_basic(const float*, float*, int);
 extern void rms_norm_vector_fast(const float*, float*, int);
-extern void rms_norm_vector_w2l3_reduction(const float*, float*, int);
-extern void rms_norm_vector_w2l3_hybrid(const float*, float*, int);
-extern void rms_norm_vector_basic_v1(const float*, float*, int);
 extern void rms_norm_vector_safe_v2(const float*, float*, int);
 extern float measure_rms_norm_vector_time(void (*)(const float*, float*, int),
                                           const float*, float*, int, int);
 extern float calculate_rms_norm_vector_bandwidth(int, float);
 
-// Picked kernel: rms_norm_vector_safe_v2 (Conservative float4 opt, max compatibility)
-void (*picked_kernel)(const float*, float*, int) = rms_norm_vector_safe_v2;
+void (*picked_kernel)(const float*, float*, int) = rms_norm_vector_basic;
 
 
 /**
@@ -183,8 +179,6 @@ void benchmark_performance() {
 
 
     // Benchmark picked kernel
-    // rms_norm_vector_basic rms_norm_vector_optimized rms_norm_vector_fast
-    // rms_norm_vector_w2l3_reduction rms_norm_vector_w2l3_tile rms_norm_vector_w2l3_hybrid
     printf("Testing RMS Norm Vector kernel...\n");
     fflush(stdout);
 
