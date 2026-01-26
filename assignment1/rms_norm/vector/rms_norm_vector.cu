@@ -95,28 +95,68 @@
  /**
   * ORIGINAL Basic Phase 2: Normalize using global RMS
   */
- __global__ void rms_norm_vector_phase2(const float* input, float* output,
-                                         const float* partial_sums, int n,
-                                         int num_blocks) {
-     // Each block independently computes global RMS (redundant but safe)
-     __shared__ float global_rms;
+__global__ void rms_norm_vector_phase2(const float* input, float* output,
+                                        const float* partial_sums, int n,
+                                        int num_blocks) {
+    // // Each block independently computes global RMS (redundant but safe)
+    // __shared__ float global_rms;
 
-     if (threadIdx.x == 0) {
-         float total_sum = 0.0f;
-         for (int i = 0; i < num_blocks; i++) {
-             total_sum += partial_sums[i];
-         }
-         global_rms = sqrtf(total_sum / n + EPSILON);
-     }
-     __syncthreads();
+    // if (threadIdx.x == 0) {
+    //     float total_sum = 0.0f;
+    //     for (int i = 0; i < num_blocks; i++) {
+    //         total_sum += partial_sums[i];
+    //     }
+    //     global_rms = sqrtf(total_sum / n + EPSILON);
+    // }
+    // __syncthreads();
 
-     // Normalize
-     int block_size = blockDim.x;
-     for (int i = blockIdx.x * block_size + threadIdx.x; i < n;
-          i += gridDim.x * block_size) {
-         output[i] = input[i] / global_rms;
-     }
- }
+    // // Normalize
+    // int block_size = blockDim.x;
+    // for (int i = blockIdx.x * block_size + threadIdx.x; i < n;
+    //     i += gridDim.x * block_size) {
+    //     output[i] = input[i] / global_rms;
+    // }
+    __shared__ float sdata[256];  // blockDim.x 크기
+    
+    // ========== 1. 모든 스레드가 partial_sums를 나눠서 로드 ==========
+    float local_sum = 0.0f;
+    for (int i = threadIdx.x; i < num_blocks; i += blockDim.x) {
+        local_sum += partial_sums[i];
+    }
+    sdata[threadIdx.x] = local_sum;
+    __syncthreads();  // 이제 workload가 균등함
+    
+    // ========== 2. Shared memory에서 parallel reduction ==========
+    for (int stride = blockDim.x / 2; stride > 32; stride >>= 1) {
+        if (threadIdx.x < stride) {
+            sdata[threadIdx.x] += sdata[threadIdx.x + stride];
+        }
+        __syncthreads();
+    }
+    
+    // ========== 3. 마지막 warp는 warp-level reduction (더 빠름) ==========
+    if (threadIdx.x < 32) {
+        volatile float* vsdata = sdata;
+        vsdata[threadIdx.x] += vsdata[threadIdx.x + 32];
+        vsdata[threadIdx.x] += vsdata[threadIdx.x + 16];
+        vsdata[threadIdx.x] += vsdata[threadIdx.x + 8];
+        vsdata[threadIdx.x] += vsdata[threadIdx.x + 4];
+        vsdata[threadIdx.x] += vsdata[threadIdx.x + 2];
+        vsdata[threadIdx.x] += vsdata[threadIdx.x + 1];
+    }
+    
+    __shared__ float global_rms;
+    if (threadIdx.x == 0) {
+        global_rms = sqrtf(sdata[0] / n + EPSILON);
+    }
+    __syncthreads();
+    
+    // ========== 4. Normalize ==========
+    for (int i = blockIdx.x * blockDim.x + threadIdx.x; i < n;
+         i += gridDim.x * blockDim.x) {
+        output[i] = input[i] / global_rms;
+    }
+}
 
 
  /**
