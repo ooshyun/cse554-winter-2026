@@ -37,10 +37,17 @@ else
 endif
 
 # Standard NVCC flags with multi-architecture support
-# Note: C++17 required for CUDA 13.0 cooperative groups
+# Aligned with CMakeLists.txt settings
 # Compile for both sm_75 (Quadro RTX 6000) and sm_89 (RTX 4070 Ti SUPER)
 # This creates "fat binaries" that work on both GPUs
-NVCC_FLAGS = -arch=$(SM_ARCH) -std=c++17 -gencode arch=compute_75,code=sm_75 -gencode arch=compute_89,code=sm_89
+NVCC_FLAGS = -arch=$(SM_ARCH) -std=c++17 \
+             -gencode arch=compute_75,code=sm_75 \
+             -gencode arch=compute_89,code=sm_89 \
+             -O3 -DNDEBUG \
+             -Xcompiler=-fPIE \
+             -Xcompiler=-Wconversion \
+             -Xcompiler=-fno-strict-aliasing
+
 LINK_FLAGS = -cudart static
 
 # Print detected configuration

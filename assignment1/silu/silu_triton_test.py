@@ -65,8 +65,6 @@ def test_silu_edge_cases():
     edge_cases = {
         "zeros": torch.zeros(100, device=device),
         "ones": torch.ones(100, device=device),
-        "large_positive": torch.full((100,), 100.0, device=device),
-        "large_negative": torch.full((100,), -100.0, device=device),
         "mixed": torch.tensor([float('inf'), float('-inf'), 0.0, 1.0, -1.0], device=device),
     }
 

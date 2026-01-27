@@ -28,7 +28,10 @@ def silu_kernel(
     mask = offsets < n_elements
 
     # Load input with vectorization hint
-    # eviction_policy="evict_last": [TODO: explain this]
+    # eviction_policy="evict_last": eviction_policy="evict_last": 
+    # Marks this data as low-priority for the L2 cache. Since it's unlikely to be reused, 
+    # it will be evicted first when the cache is full, 
+    # preventing "cache pollution" and keeping more important data available.
     x = tl.load(input_ptr + offsets, mask=mask, other=0.0, eviction_policy="evict_last")
 
     # Compute SiLU in one fused operation

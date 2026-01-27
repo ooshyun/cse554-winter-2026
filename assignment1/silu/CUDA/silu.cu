@@ -172,7 +172,7 @@
      cudaEventDestroy(start);
      cudaEventDestroy(stop);
  
-     return milliseconds / num_iterations;
+     return milliseconds / static_cast<float>(num_iterations);
  }
  
  
@@ -188,7 +188,7 @@
 
      // Peak bandwidth in GB/s (decimal)
      // Formula: 2 × memory_clock_rate (kHz) × bus_width (bytes) / 1e6
-     float peak_gb_s = 2.0f * memClockRate * (prop.memoryBusWidth / 8) / 1e6;
+     float peak_gb_s = 2.0f * static_cast<float>(memClockRate) * (static_cast<float>(prop.memoryBusWidth) / 8.0f) / 1e6f;
      return peak_gb_s;
  }
  
@@ -209,11 +209,11 @@
   */
  float calculate_bandwidth(int n, float time_ms) {
      // Memory accesses: 1 read + 1 write = 2 * n * sizeof(float)
-     size_t bytes = 2 * n * sizeof(float);
+     size_t bytes = 2 * static_cast<size_t>(n) * sizeof(float);
      float time_s = time_ms / 1000.0f;
  
      // Use decimal GB/s to match official specs (1 GB = 10^9 bytes)
-     float bandwidth_gb_s = (bytes / time_s) / 1e9;
+     float bandwidth_gb_s = (static_cast<float>(bytes) / time_s) / 1e9f;
      return bandwidth_gb_s;
  }
  

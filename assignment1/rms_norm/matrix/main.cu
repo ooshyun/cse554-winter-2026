@@ -50,7 +50,7 @@ void rms_norm_cpu(const float* input, float* output, int rows, int cols) {
         }
 
         // Compute RMS
-        float rms = sqrtf(sum_sq / cols + EPSILON);
+        float rms = sqrtf(sum_sq / static_cast<float>(cols) + EPSILON);
 
         // Normalize
         for (int col = 0; col < cols; col++) {
@@ -65,7 +65,7 @@ void rms_norm_cpu(const float* input, float* output, int rows, int cols) {
  * Verify CUDA results against CPU reference
  */
 bool verify_rms_norm(const float* cuda_result, const float* cpu_result,
-                    int rows, int cols, float tolerance = 1e-4) {
+                    int rows, int cols, float tolerance = 1e-4f) {
     float max_diff = 0.0f;
     int max_diff_row = 0;
     int max_diff_col = 0;
@@ -189,7 +189,7 @@ void benchmark_performance() {
     // Initialize input
     srand(42);
     for (int i = 0; i < n; i++) {
-        h_input[i] = ((float)rand() / RAND_MAX) * 20.0f - 10.0f;
+        h_input[i] = (static_cast<float>(rand()) / static_cast<float>(RAND_MAX)) * 20.0f - 10.0f;
     }
 
     // Allocate device memory

@@ -1,693 +1,0 @@
-========================================================================
-CSE 554 Assignment 1 - Section 1: SiLU (Python/Triton)
-========================================================================
-
-CSE 554 Assignment 1 - Section 1: SiLU (PyTorch Implementation)
-================================================================================
-CUDA Device: NVIDIA GeForce RTX 4070 Ti SUPER
-Using device: cuda
-
-Torch Profiler results saved to: silu/profiling_results/torch_silu.json
-
-================================================================================
-TORCH PROFILER SUMMARY
-================================================================================
--------------------------------------------------------  ------------  ------------  ------------  ------------  ------------  ------------  ------------  ------------  ------------  ------------  ------------  ------------  ------------  ------------  
-                                                   Name    Self CPU %      Self CPU   CPU total %     CPU total  CPU time avg     Self CUDA   Self CUDA %    CUDA total  CUDA time avg       CPU Mem  Self CPU Mem      CUDA Mem  Self CUDA Mem    # of Calls  
--------------------------------------------------------  ------------  ------------  ------------  ------------  ------------  ------------  ------------  ------------  ------------  ------------  ------------  ------------  ------------  ------------  
-                                              aten::mul         0.04%     522.321us         0.08%     934.309us       4.672us     454.767ms        38.41%     454.767ms       2.274ms           0 b           0 b      50.00 Gb      50.00 Gb           200  
-void at::native::vectorized_elementwise_kernel<4, at...         0.00%       0.000us         0.00%       0.000us       0.000us     271.087ms        22.89%     271.087ms       2.711ms           0 b           0 b           0 b           0 b           100  
-                                       aten::reciprocal         0.02%     235.683us         0.03%     394.971us       3.950us     183.868ms        15.53%     183.868ms       1.839ms           0 b           0 b      25.00 Gb      25.00 Gb           100  
-void at::native::vectorized_elementwise_kernel<4, at...         0.00%       0.000us         0.00%       0.000us       0.000us     183.868ms        15.53%     183.868ms       1.839ms           0 b           0 b           0 b           0 b           100  
-                                              aten::exp         0.02%     230.669us         0.03%     382.668us       3.827us     183.781ms        15.52%     183.781ms       1.838ms           0 b           0 b      25.00 Gb      25.00 Gb           100  
-void at::native::vectorized_elementwise_kernel<4, at...         0.00%       0.000us         0.00%       0.000us       0.000us     183.781ms        15.52%     183.781ms       1.838ms           0 b           0 b           0 b           0 b           100  
-void at::native::vectorized_elementwise_kernel<4, at...         0.00%       0.000us         0.00%       0.000us       0.000us     183.680ms        15.51%     183.680ms       1.837ms           0 b           0 b           0 b           0 b           100  
-                                              aten::add         0.02%     264.293us         0.04%     426.046us       4.260us     181.503ms        15.33%     181.503ms       1.815ms           0 b           0 b      25.00 Gb      25.00 Gb           100  
-void at::native::vectorized_elementwise_kernel<4, at...         0.00%       0.000us         0.00%       0.000us       0.000us     181.503ms        15.33%     181.503ms       1.815ms           0 b           0 b           0 b           0 b           100  
-                                              aten::neg         0.10%       1.227ms         0.12%       1.396ms      13.960us     180.205ms        15.22%     180.205ms       1.802ms           0 b           0 b      25.00 Gb      25.00 Gb           100  
--------------------------------------------------------  ------------  ------------  ------------  ------------  ------------  ------------  ------------  ------------  ------------  ------------  ------------  ------------  ------------  ------------  
-Self CPU time total: 1.187s
-Self CUDA time total: 1.184s
-
-
-================================================================================
-PERFORMANCE METRICS
-================================================================================
-Matrix shape: (8192, 8192)
-Average execution time: 11.8832 ms
-Minimum memory accesses: 512.00 MB
-Bandwidth utilization: 42.08 GB/s (6.3% of peak)
-Peak bandwidth (datasheet): 672.00 GB/s
-================================================================================
-
-Correctness check:
-Input: [[ 1. -1.]
- [ 0.  2.]]
-Output: [[ 0.73105854 -0.26894143]
- [ 0.          1.761594  ]]
-Expected (nn.functional.silu): [[ 0.73105854 -0.26894143]
- [ 0.          1.761594  ]]
-Max difference: 0.00e+00
-
-================================================================================
-KERNEL ANALYSIS
-================================================================================
-Kernels launched during SiLU execution:
-  - void at::native::vectorized_elementwise_kernel<4, at::native::neg_kernel_cuda(at::TensorIteratorBase&)::{lambda()#2}::operator()() const::{lambda()#7}::operator()() const::{lambda(float)#1}, std::array<char*, 2ul> >(int, at::native::neg_kernel_cuda(at::TensorIteratorBase&)::{lambda()#2}::operator()() const::{lambda()#7}::operator()() const::{lambda(float)#1}, std::array<char*, 2ul>): 0.8649 ms
-  - void at::native::vectorized_elementwise_kernel<4, at::native::exp_kernel_cuda(at::TensorIteratorBase&)::{lambda()#2}::operator()() const::{lambda()#2}::operator()() const::{lambda(float)#1}, std::array<char*, 2ul> >(int, at::native::exp_kernel_cuda(at::TensorIteratorBase&)::{lambda()#2}::operator()() const::{lambda()#2}::operator()() const::{lambda(float)#1}, std::array<char*, 2ul>): 3.1791 ms
-  - void at::native::vectorized_elementwise_kernel<4, at::native::CUDAFunctorOnSelf_add<float>, std::array<char*, 2ul> >(int, at::native::CUDAFunctorOnSelf_add<float>, std::array<char*, 2ul>): 0.8705 ms
-  - void at::native::vectorized_elementwise_kernel<4, at::native::reciprocal_kernel_cuda(at::TensorIteratorBase&)::{lambda()#1}::operator()() const::{lambda()#2}::operator()() const::{lambda(float)#1}, std::array<char*, 2ul> >(int, at::native::reciprocal_kernel_cuda(at::TensorIteratorBase&)::{lambda()#1}::operator()() const::{lambda()#2}::operator()() const::{lambda(float)#1}, std::array<char*, 2ul>): 0.8725 ms
-  - void at::native::vectorized_elementwise_kernel<4, at::native::AUnaryFunctor<float, float, float, at::native::binary_internal::MulFunctor<float> >, std::array<char*, 2ul> >(int, at::native::AUnaryFunctor<float, float, float, at::native::binary_internal::MulFunctor<float> >, std::array<char*, 2ul>): 3.1708 ms
-  - void at::native::vectorized_elementwise_kernel<4, at::native::BinaryFunctor<float, float, float, at::native::binary_internal::MulFunctor<float> >, std::array<char*, 3ul> >(int, at::native::BinaryFunctor<float, float, float, at::native::binary_internal::MulFunctor<float> >, std::array<char*, 3ul>): 1.3070 ms
-================================================================================
-
-✓ Profiling complete!
-  - Torch Profiler output: profiling_results/torch_silu.json
-  - Run Nsight Systems: nsys profile -o profiling_results/torch_silu python3 srcs/python/silu/silu_torch.py
-CSE 554 Assignment 1 - Section 1: SiLU (PyTorch Implementation)
-================================================================================
-CUDA Device: NVIDIA GeForce RTX 4070 Ti SUPER
-Using device: cuda
-
-Torch Profiler results saved to: silu/profiling_results/torch_silu.json
-
-================================================================================
-TORCH PROFILER SUMMARY
-================================================================================
---------------------  ------------  ------------  ------------  ------------  ------------  ------------  ------------  ------------  ------------  ------------  
-                Name    Self CPU %      Self CPU   CPU total %     CPU total  CPU time avg       CPU Mem  Self CPU Mem      CUDA Mem  Self CUDA Mem    # of Calls  
---------------------  ------------  ------------  ------------  ------------  ------------  ------------  ------------  ------------  ------------  ------------  
-            [memory]         0.00%       0.000us         0.00%       0.000us       0.000us           0 b           0 b    -150.00 Gb    -150.00 Gb          1000  
-           aten::neg        16.81%     428.980us        16.81%     428.980us       4.290us           0 b           0 b      25.00 Gb      25.00 Gb           100  
-           aten::exp        15.18%     387.497us        15.18%     387.497us       3.875us           0 b           0 b      25.00 Gb      25.00 Gb           100  
-           aten::add        15.99%     408.003us        15.99%     408.003us       4.080us           0 b           0 b      25.00 Gb      25.00 Gb           100  
-    aten::reciprocal        15.00%     382.907us        15.00%     382.907us       3.829us           0 b           0 b      25.00 Gb      25.00 Gb           100  
-           aten::mul        37.02%     944.651us        37.02%     944.651us       4.723us           0 b           0 b      50.00 Gb      50.00 Gb           200  
---------------------  ------------  ------------  ------------  ------------  ------------  ------------  ------------  ------------  ------------  ------------  
-Self CPU time total: 2.552ms
-
-
-================================================================================
-PERFORMANCE METRICS
-================================================================================
-Matrix shape: (8192, 8192)
-Average execution time: 11.8857 ms
-Minimum memory accesses: 512.00 MB
-Bandwidth utilization: 42.07 GB/s (6.3% of peak)
-Peak bandwidth (datasheet): 672.00 GB/s
-================================================================================
-
-Correctness check:
-Input: [[ 1. -1.]
- [ 0.  2.]]
-Output: [[ 0.73105854 -0.26894143]
- [ 0.          1.761594  ]]
-Expected (nn.functional.silu): [[ 0.73105854 -0.26894143]
- [ 0.          1.761594  ]]
-Max difference: 0.00e+00
-
-================================================================================
-KERNEL ANALYSIS
-================================================================================
-Kernels launched during SiLU execution:
-================================================================================
-
-✓ Profiling complete!
-  - Torch Profiler output: profiling_results/torch_silu.json
-  - Run Nsight Systems: nsys profile -o profiling_results/torch_silu python3 srcs/python/silu/silu_torch.py
-Generating '/tmp/nsys-report-0969.qdstrm'
-[1/8] [0%                          ] nsys-report-1c21.nsys-rep[1/8] [0%                          ] nsys-report-1c21.nsys-rep[1/8] [5%                          ] nsys-report-1c21.nsys-rep[1/8] [10%                         ] nsys-report-1c21.nsys-rep[1/8] [5%                          ] nsys-report-1c21.nsys-rep[1/8] [6%                          ] nsys-report-1c21.nsys-rep[1/8] [==19%                       ] nsys-report-1c21.nsys-rep[1/8] [======35%                   ] nsys-report-1c21.nsys-rep[1/8] [===========52%              ] nsys-report-1c21.nsys-rep[1/8] [================69%         ] nsys-report-1c21.nsys-rep[1/8] [====================85%     ] nsys-report-1c21.nsys-rep[1/8] [=======================95%  ] nsys-report-1c21.nsys-rep[1/8] [========================100%] nsys-report-1c21.nsys-rep[1/8] [========================100%] nsys-report-1c21.nsys-rep
-[2/8] [0%                          ] nsys-report-557e.sqlite[2/8] [1%                          ] nsys-report-557e.sqlite[2/8] [2%                          ] nsys-report-557e.sqlite[2/8] [3%                          ] nsys-report-557e.sqlite[2/8] [4%                          ] nsys-report-557e.sqlite[2/8] [5%                          ] nsys-report-557e.sqlite[2/8] [6%                          ] nsys-report-557e.sqlite[2/8] [7%                          ] nsys-report-557e.sqlite[2/8] [8%                          ] nsys-report-557e.sqlite[2/8] [9%                          ] nsys-report-557e.sqlite[2/8] [10%                         ] nsys-report-557e.sqlite[2/8] [11%                         ] nsys-report-557e.sqlite[2/8] [12%                         ] nsys-report-557e.sqlite[2/8] [13%                         ] nsys-report-557e.sqlite[2/8] [14%                         ] nsys-report-557e.sqlite[2/8] [=15%                        ] nsys-report-557e.sqlite[2/8] [=16%                        ] nsys-report-557e.sqlite[2/8] [=17%                        ] nsys-report-557e.sqlite[2/8] [==18%                       ] nsys-report-557e.sqlite[2/8] [==19%                       ] nsys-report-557e.sqlite[2/8] [==20%                       ] nsys-report-557e.sqlite[2/8] [==21%                       ] nsys-report-557e.sqlite[2/8] [===22%                      ] nsys-report-557e.sqlite[2/8] [===23%                      ] nsys-report-557e.sqlite[2/8] [===24%                      ] nsys-report-557e.sqlite[2/8] [====25%                     ] nsys-report-557e.sqlite[2/8] [====26%                     ] nsys-report-557e.sqlite[2/8] [====27%                     ] nsys-report-557e.sqlite[2/8] [====28%                     ] nsys-report-557e.sqlite[2/8] [=====29%                    ] nsys-report-557e.sqlite[2/8] [=====30%                    ] nsys-report-557e.sqlite[2/8] [=====31%                    ] nsys-report-557e.sqlite[2/8] [=====32%                    ] nsys-report-557e.sqlite[2/8] [======33%                   ] nsys-report-557e.sqlite[2/8] [======34%                   ] nsys-report-557e.sqlite[2/8] [======35%                   ] nsys-report-557e.sqlite[2/8] [=======36%                  ] nsys-report-557e.sqlite[2/8] [=======37%                  ] nsys-report-557e.sqlite[2/8] [=======38%                  ] nsys-report-557e.sqlite[2/8] [=======39%                  ] nsys-report-557e.sqlite[2/8] [========40%                 ] nsys-report-557e.sqlite[2/8] [========41%                 ] nsys-report-557e.sqlite[2/8] [========42%                 ] nsys-report-557e.sqlite[2/8] [=========43%                ] nsys-report-557e.sqlite[2/8] [=========44%                ] nsys-report-557e.sqlite[2/8] [=========45%                ] nsys-report-557e.sqlite[2/8] [=========46%                ] nsys-report-557e.sqlite[2/8] [==========47%               ] nsys-report-557e.sqlite[2/8] [==========48%               ] nsys-report-557e.sqlite[2/8] [==========49%               ] nsys-report-557e.sqlite[2/8] [===========50%              ] nsys-report-557e.sqlite[2/8] [===========51%              ] nsys-report-557e.sqlite[2/8] [===========52%              ] nsys-report-557e.sqlite[2/8] [===========53%              ] nsys-report-557e.sqlite[2/8] [============54%             ] nsys-report-557e.sqlite[2/8] [============55%             ] nsys-report-557e.sqlite[2/8] [============56%             ] nsys-report-557e.sqlite[2/8] [============57%             ] nsys-report-557e.sqlite[2/8] [=============58%            ] nsys-report-557e.sqlite[2/8] [=============59%            ] nsys-report-557e.sqlite[2/8] [=============60%            ] nsys-report-557e.sqlite[2/8] [==============61%           ] nsys-report-557e.sqlite[2/8] [==============62%           ] nsys-report-557e.sqlite[2/8] [==============63%           ] nsys-report-557e.sqlite[2/8] [==============64%           ] nsys-report-557e.sqlite[2/8] [===============65%          ] nsys-report-557e.sqlite[2/8] [===============66%          ] nsys-report-557e.sqlite[2/8] [===============67%          ] nsys-report-557e.sqlite[2/8] [================68%         ] nsys-report-557e.sqlite[2/8] [================69%         ] nsys-report-557e.sqlite[2/8] [================70%         ] nsys-report-557e.sqlite[2/8] [================71%         ] nsys-report-557e.sqlite[2/8] [=================72%        ] nsys-report-557e.sqlite[2/8] [=================73%        ] nsys-report-557e.sqlite[2/8] [=================74%        ] nsys-report-557e.sqlite[2/8] [==================75%       ] nsys-report-557e.sqlite[2/8] [==================76%       ] nsys-report-557e.sqlite[2/8] [==================77%       ] nsys-report-557e.sqlite[2/8] [==================78%       ] nsys-report-557e.sqlite[2/8] [===================79%      ] nsys-report-557e.sqlite[2/8] [===================80%      ] nsys-report-557e.sqlite[2/8] [===================81%      ] nsys-report-557e.sqlite[2/8] [===================82%      ] nsys-report-557e.sqlite[2/8] [====================83%     ] nsys-report-557e.sqlite[2/8] [====================84%     ] nsys-report-557e.sqlite[2/8] [====================85%     ] nsys-report-557e.sqlite[2/8] [=====================86%    ] nsys-report-557e.sqlite[2/8] [=====================87%    ] nsys-report-557e.sqlite[2/8] [=====================88%    ] nsys-report-557e.sqlite[2/8] [=====================89%    ] nsys-report-557e.sqlite[2/8] [======================90%   ] nsys-report-557e.sqlite[2/8] [======================91%   ] nsys-report-557e.sqlite[2/8] [======================92%   ] nsys-report-557e.sqlite[2/8] [=======================93%  ] nsys-report-557e.sqlite[2/8] [=======================94%  ] nsys-report-557e.sqlite[2/8] [=======================95%  ] nsys-report-557e.sqlite[2/8] [=======================96%  ] nsys-report-557e.sqlite[2/8] [========================97% ] nsys-report-557e.sqlite[2/8] [========================98% ] nsys-report-557e.sqlite[2/8] [========================99% ] nsys-report-557e.sqlite[2/8] [========================100%] nsys-report-557e.sqlite[2/8] [========================100%] nsys-report-557e.sqlite
-[3/8] Executing 'nvtx_sum' stats report
-[4/8] Executing 'osrt_sum' stats report
-
- Time (%)  Total Time (ns)  Num Calls     Avg (ns)        Med (ns)      Min (ns)       Max (ns)       StdDev (ns)             Name         
- --------  ---------------  ---------  ---------------  -------------  -----------  --------------  ---------------  ----------------------
-     33.7   26,858,845,406         30    895,294,846.9  500,118,164.0  500,060,354   5,000,092,217  1,231,325,193.2  pthread_cond_timedwait
-     18.2   14,484,740,856          3  4,828,246,952.0      166,158.0       20,178  14,484,554,520  8,362,607,661.0  pthread_join          
-     18.2   14,478,765,647          9  1,608,751,738.6       58,297.0        7,848  14,478,122,569  4,826,014,061.9  epoll_wait            
-     17.2   13,743,036,977        149     92,235,147.5  100,150,696.0          814     123,149,880     26,499,201.2  poll                  
-     12.5   10,003,418,444         15    666,894,562.9        6,459.0          327  10,000,104,084  2,581,954,716.5  futex                 
-      0.1      106,366,689         52      2,045,513.3    1,844,769.0      225,896      12,195,405      1,595,213.0  pthread_mutex_lock    
-      0.0       23,511,175        566         41,539.2        3,964.0          186       8,655,722        386,199.1  ioctl                 
-      0.0       16,177,446         55        294,135.4        1,086.0          376      16,065,338      2,165,971.5  fopen                 
-      0.0        9,540,246         29        328,974.0       53,109.0       26,041       8,072,698      1,489,338.5  sleep                 
-      0.0        5,307,848      2,281          2,327.0          434.0          114         137,374          7,597.4  read                  
-      0.0        5,102,589          1      5,102,589.0    5,102,589.0    5,102,589       5,102,589              0.0  nanosleep             
-      0.0        4,589,730      1,310          3,503.6        3,277.5        2,697          17,992            796.5  writev                
-      0.0        1,964,049      1,551          1,266.3        1,144.0          328          22,181            989.8  open64                
-      0.0        1,124,426        621          1,810.7          917.0          426          35,181          2,047.8  munmap                
-      0.0          934,206     83,198             11.2           10.0            8           2,201             12.2  pthread_cond_signal   
-      0.0          895,162        674          1,328.1          279.0          212         377,167         14,699.0  mmap64                
-      0.0          632,058         10         63,205.8       54,458.5       40,372         121,943         24,681.8  sem_timedwait         
-      0.0          453,218      1,482            305.8           39.0           18          24,360          1,780.9  fgets                 
-      0.0          172,229          9         19,136.6       20,371.0        9,288          24,797          4,964.6  pthread_create        
-      0.0          111,144          1        111,144.0      111,144.0      111,144         111,144              0.0  pthread_cond_wait     
-      0.0          103,487         64          1,617.0          893.5          173          18,602          2,677.3  mmap                  
-      0.0           76,284         12          6,357.0        2,610.5          770          40,333         11,089.8  fopen64               
-      0.0           74,442      3,710             20.1           14.0           12           2,743             68.3  pthread_mutex_trylock 
-      0.0           68,352          1         68,352.0       68,352.0       68,352          68,352              0.0  posix_spawnp          
-      0.0           46,409          1         46,409.0       46,409.0       46,409          46,409              0.0  waitpid               
-      0.0           40,422         55            734.9          423.0          273           3,465            731.4  fclose                
-      0.0           36,963      1,822             20.3           16.0            9           1,874             57.0  pthread_cond_broadcast
-      0.0           27,324         23          1,188.0        1,033.0          241           4,385            942.2  write                 
-      0.0           21,486         10          2,148.6        1,980.5          442           4,732          1,567.0  open                  
-      0.0           12,259          4          3,064.8        2,848.5          912           5,650          2,103.0  fread                 
-      0.0           11,686         76            153.8          109.5           79             664            106.5  fcntl                 
-      0.0            9,193         90            102.1           79.0           15             771             92.7  sigaction             
-      0.0            8,965          2          4,482.5        4,482.5        2,744           6,221          2,458.6  socket                
-      0.0            7,602          3          2,534.0        2,565.0          818           4,219          1,700.7  pipe2                 
-      0.0            6,174          6          1,029.0          906.0          495           1,823            467.2  flock                 
-      0.0            5,906          1          5,906.0        5,906.0        5,906           5,906              0.0  connect               
-      0.0            5,004          5          1,000.8          909.0          201           2,410            897.9  fwrite                
-      0.0            4,719          4          1,179.8        1,357.5          362           1,642            577.1  epoll_ctl             
-      0.0            3,590          1          3,590.0        3,590.0        3,590           3,590              0.0  socketpair            
-      0.0            3,338          3          1,112.7        1,085.0          732           1,521            395.2  mprotect              
-      0.0            2,918          4            729.5          559.5          488           1,311            389.1  prctl                 
-      0.0            2,819        182             15.5           14.0           12             136              9.4  flockfile             
-      0.0            2,566         59             43.5           19.0           17             445             79.4  fflush                
-      0.0              925          1            925.0          925.0          925             925              0.0  bind                  
-      0.0              899          7            128.4          129.0           82             201             42.5  dup                   
-      0.0              819          3            273.0          176.0          171             472            172.4  putc                  
-      0.0              675          1            675.0          675.0          675             675              0.0  signal                
-      0.0              368          1            368.0          368.0          368             368              0.0  listen                
-
-[5/8] Executing 'cuda_api_sum' stats report
-
- Time (%)  Total Time (ns)  Num Calls    Avg (ns)       Med (ns)    Min (ns)    Max (ns)      StdDev (ns)                 Name               
- --------  ---------------  ---------  -------------  ------------  --------  -------------  -------------  ---------------------------------
-     74.8    9,893,545,311      6,678    1,481,513.2     868,741.5     1,347     10,066,834    1,346,877.3  cudaLaunchKernel                 
-     25.2    3,331,045,250          7  475,863,607.1  12,275,721.0       765  2,023,783,647  808,671,126.2  cudaDeviceSynchronize            
-      0.0        3,703,423          5      740,684.6      18,870.0     6,249      2,126,041    1,020,006.3  cudaMemcpyAsync                  
-      0.0        1,856,728          5      371,345.6       1,354.0       838      1,848,824      825,937.2  cudaStreamSynchronize            
-      0.0          823,719          2      411,859.5     411,859.5     8,019        815,700      571,116.7  cudaEventRecord                  
-      0.0          541,803          6       90,300.5      88,899.5    43,926        149,298       35,959.8  cudaMalloc                       
-      0.0          423,710          1      423,710.0     423,710.0   423,710        423,710            0.0  cudaHostAlloc                    
-      0.0          115,029          2       57,514.5      57,514.5    39,144         75,885       25,979.8  cudaGetDeviceProperties_v2_v12000
-      0.0           13,900         10        1,390.0         804.0       142          7,288        2,124.6  cudaStreamIsCapturing_v10000     
-      0.0           13,049          2        6,524.5       6,524.5     3,007         10,042        4,974.5  cudaEventCreateWithFlags         
-      0.0            1,892          2          946.0         946.0       251          1,641          982.9  cudaEventDestroy                 
-      0.0            1,743          1        1,743.0       1,743.0     1,743          1,743            0.0  cuModuleGetLoadingMode           
-
-[6/8] Executing 'cuda_gpu_kern_sum' stats report
-
- Time (%)  Total Time (ns)  Instances   Avg (ns)     Med (ns)    Min (ns)  Max (ns)   StdDev (ns)                                                  Name                                                
- --------  ---------------  ---------  -----------  -----------  --------  ---------  -----------  ----------------------------------------------------------------------------------------------------
-     23.1    3,047,604,094      1,112  2,740,651.2  3,607,484.0     1,024  3,668,380  1,120,218.1  void at::native::vectorized_elementwise_kernel<(int)4, at::native::BinaryFunctor<float, float, floa…
-     15.4    2,037,013,946      1,112  1,831,847.1    872,614.5     1,024  3,234,809  1,138,047.2  void at::native::vectorized_elementwise_kernel<(int)4, at::native::reciprocal_kernel_cuda(at::Tenso…
-     15.4    2,035,120,123      1,112  1,830,144.0    872,967.0       896  3,188,793  1,135,380.1  void at::native::vectorized_elementwise_kernel<(int)4, at::native::AUnaryFunctor<float, float, floa…
-     15.4    2,033,764,056      1,112  1,828,924.5    872,615.0     1,344  3,193,752  1,136,353.8  void at::native::vectorized_elementwise_kernel<(int)4, at::native::exp_kernel_cuda(at::TensorIterat…
-     15.4    2,027,219,341      1,112  1,823,039.0    873,959.0     1,024  3,192,376  1,134,338.0  void at::native::vectorized_elementwise_kernel<(int)4, at::native::CUDAFunctorOnSelf_add<float>, st…
-     15.2    2,008,344,214      1,112  1,806,064.9    861,575.0     1,345  3,174,936  1,133,337.5  void at::native::vectorized_elementwise_kernel<(int)4, at::native::neg_kernel_cuda(at::TensorIterat…
-      0.0          886,152          2    443,076.0    443,076.0   441,508    444,644      2,217.5  void at::native::<unnamed>::distribution_elementwise_grid_stride_kernel<float, (int)4, void at::nat…
-      0.0            2,176          1      2,176.0      2,176.0     2,176      2,176          0.0  void at::native::reduce_kernel<(int)512, (int)1, at::native::ReduceOp<float, at::native::func_wrapp…
-      0.0            1,184          1      1,184.0      1,184.0     1,184      1,184          0.0  void at::native::vectorized_elementwise_kernel<(int)4, at::native::<unnamed>::silu_kernel(at::Tenso…
-      0.0              927          1        927.0        927.0       927        927          0.0  void at::native::vectorized_elementwise_kernel<(int)4, at::native::CUDAFunctor_add<float>, std::arr…
-      0.0              896          1        896.0        896.0       896        896          0.0  void at::native::vectorized_elementwise_kernel<(int)4, at::native::AbsFunctor<float>, std::array<ch…
-
-[7/8] Executing 'cuda_gpu_mem_time_sum' stats report
-
- Time (%)  Total Time (ns)  Count  Avg (ns)  Med (ns)  Min (ns)  Max (ns)  StdDev (ns)           Operation          
- --------  ---------------  -----  --------  --------  --------  --------  -----------  ----------------------------
-     88.9            4,097      4   1,024.3   1,072.5       736     1,216        204.1  [CUDA memcpy Device-to-Host]
-     11.1              512      1     512.0     512.0       512       512          0.0  [CUDA memcpy Host-to-Device]
-
-[8/8] Executing 'cuda_gpu_mem_size_sum' stats report
-
- Total (MB)  Count  Avg (MB)  Med (MB)  Min (MB)  Max (MB)  StdDev (MB)           Operation          
- ----------  -----  --------  --------  --------  --------  -----------  ----------------------------
-      0.000      4     0.000     0.000     0.000     0.000        0.000  [CUDA memcpy Device-to-Host]
-      0.000      1     0.000     0.000     0.000     0.000        0.000  [CUDA memcpy Host-to-Device]
-
-Generated:
-    /tmp/nsys-report-1c21.nsys-rep
-    /tmp/nsys-report-557e.sqlite
-Generating SQLite file silu/profiling_results/torch_silu.sqlite from silu/profiling_results/torch_silu.nsys-rep
-Processing [silu/profiling_results/torch_silu.sqlite] with [/opt/nvidia/nsight-systems/2023.4.4/host-linux-x64/reports/cuda_gpu_kern_sum.py]... 
-
- ** CUDA GPU Kernel Summary (cuda_gpu_kern_sum):
-
- Time (%)  Total Time (ns)  Instances   Avg (ns)     Med (ns)    Min (ns)  Max (ns)   StdDev (ns)                                                  Name                                                
- --------  ---------------  ---------  -----------  -----------  --------  ---------  -----------  ----------------------------------------------------------------------------------------------------
-     23.0    3,035,741,332      1,112  2,729,983.2  3,607,294.0     1,024  3,667,231  1,122,779.4  void at::native::vectorized_elementwise_kernel<(int)4, at::native::BinaryFunctor<float, float, floa…
-     15.5    2,037,468,980      1,112  1,832,256.3    873,023.0       864  3,189,656  1,135,981.6  void at::native::vectorized_elementwise_kernel<(int)4, at::native::AUnaryFunctor<float, float, floa…
-     15.5    2,036,828,395      1,112  1,831,680.2    872,687.0       992  3,233,912  1,137,916.8  void at::native::vectorized_elementwise_kernel<(int)4, at::native::reciprocal_kernel_cuda(at::Tenso…
-     15.4    2,029,585,194      1,112  1,825,166.5    873,935.0     1,023  3,195,767  1,134,708.9  void at::native::vectorized_elementwise_kernel<(int)4, at::native::CUDAFunctorOnSelf_add<float>, st…
-     15.4    2,026,805,492      1,112  1,822,666.8    872,735.0     1,375  3,197,431  1,135,151.1  void at::native::vectorized_elementwise_kernel<(int)4, at::native::exp_kernel_cuda(at::TensorIterat…
-     15.2    2,008,074,892      1,112  1,805,822.7    861,567.0     1,345  3,178,903  1,133,211.6  void at::native::vectorized_elementwise_kernel<(int)4, at::native::neg_kernel_cuda(at::TensorIterat…
-      0.0          892,846          2    446,423.0    446,423.0   443,431    449,415      4,231.3  void at::native::<unnamed>::distribution_elementwise_grid_stride_kernel<float, (int)4, void at::nat…
-      0.0            2,176          1      2,176.0      2,176.0     2,176      2,176          0.0  void at::native::reduce_kernel<(int)512, (int)1, at::native::ReduceOp<float, at::native::func_wrapp…
-      0.0            1,184          1      1,184.0      1,184.0     1,184      1,184          0.0  void at::native::vectorized_elementwise_kernel<(int)4, at::native::<unnamed>::silu_kernel(at::Tenso…
-      0.0              927          1        927.0        927.0       927        927          0.0  void at::native::vectorized_elementwise_kernel<(int)4, at::native::CUDAFunctor_add<float>, std::arr…
-      0.0              896          1        896.0        896.0       896        896          0.0  void at::native::vectorized_elementwise_kernel<(int)4, at::native::AbsFunctor<float>, std::array<ch…
-
-CSE 554 Assignment 1 - SiLU Triton Kernel Test Suite
-================================================================================
-CUDA Device: NVIDIA GeForce RTX 4070 Ti SUPER
-
-Test case 1: max difference = 2.38e-07
-Test case 2: max difference = 9.54e-07
-Test case 3: max difference = 5.96e-08
-Test case 4: max difference = 9.54e-07
-✓ All correctness tests passed!
-
-✓ Shape (100,): passed
-✓ Shape (1000,): passed
-✓ Shape (1024, 1024): passed
-✓ Shape (8192, 8192): passed
-✓ Shape (100, 200, 300): passed
-✓ All shape tests passed!
-
-✓ Edge case 'zeros': max difference = 0.00e+00
-✓ Edge case 'ones': max difference = 5.96e-08
-✓ Edge case 'large_positive': max difference = 0.00e+00
-✓ Edge case 'large_negative': max difference = 0.00e+00
-✓ Edge case 'mixed': max difference (finite) = 5.96e-08
-
-Block size 128: max difference = 9.54e-07
-Block size 256: max difference = 9.54e-07
-Block size 512: max difference = 9.54e-07
-Block size 1024: max difference = 9.54e-07
-✓ All block size tests passed!
-
-
-================================================================================
-PERFORMANCE BENCHMARKING
-================================================================================
-
-Shape: (8192, 8192)
-  Execution time: 1.8149 ms
-  Bandwidth: 275.50 GB/s
-  Bandwidth percentage: 41.0%
-
-================================================================================
-✓ ALL TESTS PASSED!
-================================================================================
-Compiling CUDA SiLU kernel...
-========================================
-Detected GPU: Compute Capability 8.9
-Compiling for: sm_89 (RTX_4070_Ti_SUPER)
-========================================
-rm -f main.o silu.o silu_test main.profile.o silu.profile.o silu_test_profile
-========================================
-Detected GPU: Compute Capability 8.9
-Compiling for: sm_89 (RTX_4070_Ti_SUPER)
-========================================
-nvcc -O3 -arch=sm_89 -std=c++17 --use_fast_math -Xptxas -v -c main.cu -o main.o
-nvcc -O3 -arch=sm_89 -std=c++17 --use_fast_math -Xptxas -v -c silu.cu -o silu.o
-nvcc -O3 -arch=sm_89 -std=c++17 --use_fast_math -Xptxas -v -o silu_test main.o silu.o
-✓ Compilation successful
-
-========================================================================
-Running CUDA SiLU Tests...
-========================================================================
-CSE 554 Assignment 1 - Section 1: SiLU CUDA Implementation
-================================================================================
-GPU: NVIDIA GeForce RTX 4070 Ti SUPER
-Compute Capability: 8.9
-Memory Clock Rate: 10.50 GHz
-Memory Bus Width: 256 bits
-Peak Memory Bandwidth: 672.06 GB/s
-
-================================================================================
-CORRECTNESS TEST
-================================================================================
-
-Input -> CPU Output | CUDA Output | Difference
---------------------------------------------------------------
- -5.00 ->  -0.033464 |  -0.033464 | 0.00e+00
- -2.00 ->  -0.238406 |  -0.238406 | 1.49e-08
- -1.00 ->  -0.268941 |  -0.268941 | 0.00e+00
- -0.50 ->  -0.188770 |  -0.188770 | 0.00e+00
-  0.00 ->   0.000000 |   0.000000 | 0.00e+00
-  0.50 ->   0.311230 |   0.311230 | 0.00e+00
-  1.00 ->   0.731059 |   0.731059 | 0.00e+00
-  2.00 ->   1.761594 |   1.761594 | 1.19e-07
-  5.00 ->   4.966536 |   4.966536 | 4.77e-07
- 10.00 ->   9.999546 |   9.999546 | 0.00e+00
-  Max difference: 4.77e-07 at index 8
-    CUDA: 4.966536, CPU: 4.966536
-
-✓ Correctness test: PASSED
-
-================================================================================
-PERFORMANCE BENCHMARK (8192 x 8192 matrix)
-================================================================================
-Matrix size: 8192 x 8192 = 67108864 elements
-Element size: 4 bytes
-Total memory: 256.00 MB
-Iterations: 100
-
-Testing SiLU kernel...
-  Kernel execution time: 1.8154 ms
-  Bandwidth: 295.73 GB/s (44.0% of peak 672.00 GB/s)
-
-Verifying kernel correctness...
-  Max difference: 9.54e-07 at index 51
-    CUDA: 8.438754, CPU: 8.438755
-✓ Verification: PASSED
-
-================================================================================
-SUMMARY
-================================================================================
-Target bandwidth: > 500 GB/s
-Peak memory bandwidth (datasheet): 672.00 GB/s
-Achieved bandwidth (picked kernel): 295.73 GB/s (44.0% of peak)
-Status: ✗ NEEDS OPTIMIZATION
-================================================================================
-
-✓ All tests complete!
-  Run Nsight Compute: ncu -o profiling_results/cuda_silu ./silu_test
-
-========================================================================
-Profiling with Nsight Compute...
-========================================================================
-========================================
-Detected GPU: Compute Capability 8.9
-Compiling for: sm_89 (RTX_4070_Ti_SUPER)
-========================================
-nvcc -O3 -arch=sm_89 -std=c++17 --use_fast_math -Xptxas -v -DPROFILE_NCUS -c main.cu -o main.profile.o
-nvcc -O3 -arch=sm_89 -std=c++17 --use_fast_math -Xptxas -v -DPROFILE_NCUS -c silu.cu -o silu.profile.o
-nvcc -O3 -arch=sm_89 -std=c++17 --use_fast_math -Xptxas -v -DPROFILE_NCUS -o silu_test_profile main.profile.o silu.profile.o
-==PROF== Connected to process 3156843 (/home/seunghyunoh/workspace/research/uw-cs554/assignment1/silu/CUDA/silu_test_profile)
-==ERROR== ERR_NVGPUCTRPERM - The user does not have permission to access NVIDIA GPU Performance Counters on the target device 0. For instructions on enabling permissions and to get more information see https://developer.nvidia.com/ERR_NVGPUCTRPERM
-CSE 554 Assignment 1 - Section 1: SiLU CUDA Implementation
-================================================================================
-GPU: NVIDIA GeForce RTX 4070 Ti SUPER
-Compute Capability: 8.9
-Memory Clock Rate: 10.50 GHz
-Memory Bus Width: 256 bits
-Peak Memory Bandwidth: 672.06 GB/s
-
-================================================================================
-PERFORMANCE BENCHMARK (8192 x 8192 matrix)
-================================================================================
-Matrix size: 8192 x 8192 = 67108864 elements
-Element size: 4 bytes
-Total memory: 256.00 MB
-Iterations: 1
-
-Testing SiLU kernel...
-  Kernel execution time: 0.8591 ms
-  Bandwidth: 624.90 GB/s (93.0% of peak 672.00 GB/s)
-
-================================================================================
-SUMMARY
-================================================================================
-Target bandwidth: > 500 GB/s
-Peak memory bandwidth (datasheet): 672.00 GB/s
-Achieved bandwidth (picked kernel): 624.90 GB/s (93.0% of peak)
-Status: ✓ PASSED
-================================================================================
-
-✓ All tests complete!
-  Run Nsight Compute: ncu -o profiling_results/cuda_silu ./silu_test
-==PROF== Disconnected from process 3156843
-==WARNING== No kernels were profiled.
-========================================================================
-CSE 554 Assignment 1 - Section 2: RMS Norm
-========================================================================
-
-Compiling RMS Norm Matrix...
-========================================
-Detected GPU: Compute Capability 8.9
-Compiling for: sm_89 (RTX_4070_Ti_SUPER)
-========================================
-rm -f main.o rms_norm_matrix.o rms_norm_matrix_test
-========================================
-Detected GPU: Compute Capability 8.9
-Compiling for: sm_89 (RTX_4070_Ti_SUPER)
-========================================
-nvcc -O3 -arch=sm_89 -std=c++17 --use_fast_math -Xptxas -v -c main.cu -o main.o
-nvcc -O3 -arch=sm_89 -std=c++17 --use_fast_math -Xptxas -v -c rms_norm_matrix.cu -o rms_norm_matrix.o
-nvcc -O3 -arch=sm_89 -std=c++17 --use_fast_math -Xptxas -v -o rms_norm_matrix_test main.o rms_norm_matrix.o
-✓ Compilation successful
-
-Running RMS Norm Matrix Tests...
-========================================
-Detected GPU: Compute Capability 8.9
-Compiling for: sm_89 (RTX_4070_Ti_SUPER)
-========================================
-./rms_norm_matrix_test
-CSE 554 Assignment 1 - Section 2: RMS Norm Matrix Implementation
-================================================================================
-GPU: NVIDIA GeForce RTX 4070 Ti SUPER
-Compute Capability: 8.9
-Peak Memory Bandwidth: 672.06 GB/s
-
-================================================================================
-CORRECTNESS TEST
-================================================================================
-
-Running CPU reference...
-Running CUDA kernel...
-
-First row results:
-Input:   -5.00  -4.00  -3.00  -2.00  -1.00   0.00   1.00   2.00 
-CPU:    -1.826 -1.461 -1.095 -0.730 -0.365  0.000  0.365  0.730 
-CUDA:   -1.826 -1.461 -1.095 -0.730 -0.365  0.000  0.365  0.730 
-  Max difference: 2.38e-07 at [3, 6]
-    CUDA: -1.666667, CPU: -1.666667
-
-✓ Correctness test: PASSED
-
-================================================================================
-PERFORMANCE BENCHMARK (8192 x 8192 matrix)
-================================================================================
-Matrix size: 8192 x 8192 = 67108864 elements
-Memory per matrix: 256.00 MB
-Total memory (in + out): 512.00 MB
-Iterations: 100
-
-Testing RMS Norm Matrix kernel...
-  Execution time: 7.7988 ms
-  Bandwidth: 68.84 GB/s (10.2% of peak 672.00 GB/s)
-
-Verifying kernel correctness...
-  Max difference: 3.58e-07 at [29, 95]
-    CUDA: 1.633099, CPU: 1.633099
-✓ Verification: PASSED
-
-================================================================================
-SUMMARY
-================================================================================
-Target bandwidth: > 300 GB/s
-Peak memory bandwidth (datasheet): 672.00 GB/s
-Achieved bandwidth (picked kernel): 68.84 GB/s (10.2% of peak)
-Status: ✗ NEEDS OPTIMIZATION
-================================================================================
-
-✓ All tests complete!
-  Run Nsight Compute: ncu -o profiling_results/rms_norm_matrix ./rms_norm_matrix_test
-
-Profiling with Nsight Compute...
-========================================
-Detected GPU: Compute Capability 8.9
-Compiling for: sm_89 (RTX_4070_Ti_SUPER)
-========================================
-mkdir -p profiling_results
-CSE 554 Assignment 1 - Section 2: RMS Norm Matrix Implementation
-================================================================================
-GPU: NVIDIA GeForce RTX 4070 Ti SUPER
-Compute Capability: 8.9
-Peak Memory Bandwidth: 672.06 GB/s
-
-================================================================================
-CORRECTNESS TEST
-================================================================================
-
-Running CPU reference...
-Running CUDA kernel...
-
-First row results:
-Input:   -5.00  -4.00  -3.00  -2.00  -1.00   0.00   1.00   2.00 
-CPU:    -1.826 -1.461 -1.095 -0.730 -0.365  0.000  0.365  0.730 
-CUDA:   -1.826 -1.461 -1.095 -0.730 -0.365  0.000  0.365  0.730 
-  Max difference: 2.38e-07 at [3, 6]
-    CUDA: -1.666667, CPU: -1.666667
-
-✓ Correctness test: PASSED
-
-================================================================================
-PERFORMANCE BENCHMARK (8192 x 8192 matrix)
-================================================================================
-Matrix size: 8192 x 8192 = 67108864 elements
-Memory per matrix: 256.00 MB
-Total memory (in + out): 512.00 MB
-Iterations: 100
-
-Testing RMS Norm Matrix kernel...
-  Execution time: 7.8055 ms
-  Bandwidth: 68.78 GB/s (10.2% of peak 672.00 GB/s)
-
-Verifying kernel correctness...
-  Max difference: 3.58e-07 at [29, 95]
-    CUDA: 1.633099, CPU: 1.633099
-✓ Verification: PASSED
-
-================================================================================
-SUMMARY
-================================================================================
-Target bandwidth: > 300 GB/s
-Peak memory bandwidth (datasheet): 672.00 GB/s
-Achieved bandwidth (picked kernel): 68.78 GB/s (10.2% of peak)
-Status: ✗ NEEDS OPTIMIZATION
-================================================================================
-
-✓ All tests complete!
-  Run Nsight Compute: ncu -o profiling_results/rms_norm_matrix ./rms_norm_matrix_test
-Generating '/tmp/nsys-report-d66a.qdstrm'
-[1/1] [0%                          ] rms_norm_matrix_20260125_145025.nsys-rep[1/1] [0%                          ] rms_norm_matrix_20260125_145025.nsys-rep[1/1] [=====32%                    ] rms_norm_matrix_20260125_145025.nsys-rep[1/1] [==============64%           ] rms_norm_matrix_20260125_145025.nsys-rep[1/1] [===============65%          ] rms_norm_matrix_20260125_145025.nsys-rep[1/1] [========================97% ] rms_norm_matrix_20260125_145025.nsys-rep[1/1] [========================100%] rms_norm_matrix_20260125_145025.nsys-rep[1/1] [========================100%] rms_norm_matrix_20260125_145025.nsys-rep
-Generated:
-    /home/seunghyunoh/workspace/research/uw-cs554/assignment1/rms_norm/matrix/profiling_results/rms_norm_matrix_20260125_145025.nsys-rep
-==PROF== Connected to process 3157121 (/home/seunghyunoh/workspace/research/uw-cs554/assignment1/rms_norm/matrix/rms_norm_matrix_test)
-==ERROR== ERR_NVGPUCTRPERM - The user does not have permission to access NVIDIA GPU Performance Counters on the target device 0. For instructions on enabling permissions and to get more information see https://developer.nvidia.com/ERR_NVGPUCTRPERM
-CSE 554 Assignment 1 - Section 2: RMS Norm Matrix Implementation
-================================================================================
-GPU: NVIDIA GeForce RTX 4070 Ti SUPER
-Compute Capability: 8.9
-Peak Memory Bandwidth: 672.06 GB/s
-
-================================================================================
-CORRECTNESS TEST
-================================================================================
-
-Running CPU reference...
-Running CUDA kernel...
-
-First row results:
-Input:   -5.00  -4.00  -3.00  -2.00  -1.00   0.00   1.00   2.00 
-CPU:    -1.826 -1.461 -1.095 -0.730 -0.365  0.000  0.365  0.730 
-CUDA:   -1.826 -1.461 -1.095 -0.730 -0.365  0.000  0.365  0.730 
-  Max difference: 2.38e-07 at [3, 6]
-    CUDA: -1.666667, CPU: -1.666667
-
-✓ Correctness test: PASSED
-
-================================================================================
-PERFORMANCE BENCHMARK (8192 x 8192 matrix)
-================================================================================
-Matrix size: 8192 x 8192 = 67108864 elements
-Memory per matrix: 256.00 MB
-Total memory (in + out): 512.00 MB
-Iterations: 100
-
-Testing RMS Norm Matrix kernel...
-  Execution time: 7.7998 ms
-  Bandwidth: 68.83 GB/s (10.2% of peak 672.00 GB/s)
-
-Verifying kernel correctness...
-  Max difference: 3.58e-07 at [29, 95]
-    CUDA: 1.633099, CPU: 1.633099
-✓ Verification: PASSED
-
-================================================================================
-SUMMARY
-================================================================================
-Target bandwidth: > 300 GB/s
-Peak memory bandwidth (datasheet): 672.00 GB/s
-Achieved bandwidth (picked kernel): 68.83 GB/s (10.2% of peak)
-Status: ✗ NEEDS OPTIMIZATION
-================================================================================
-
-✓ All tests complete!
-  Run Nsight Compute: ncu -o profiling_results/rms_norm_matrix ./rms_norm_matrix_test
-==PROF== Disconnected from process 3157121
-==WARNING== No kernels were profiled.
-✓ Profiling complete
-
-========================================
-Detected GPU: Compute Capability 8.9
-Compiling for: sm_89 (RTX_4070_Ti_SUPER)
-========================================
-rm -f main.o rms_norm_matrix.o rms_norm_matrix_test
-✓ Cleanup complete
-
-Compiling RMS Norm Vector...
-========================================
-Detected GPU: Compute Capability 8.9
-Compiling for: sm_89 (RTX_4070_Ti_SUPER)
-========================================
-rm -f main.o rms_norm_vector.o rms_norm_vector_test
-========================================
-Detected GPU: Compute Capability 8.9
-Compiling for: sm_89 (RTX_4070_Ti_SUPER)
-========================================
-nvcc -O3 -arch=sm_89 -std=c++17 --use_fast_math -Xptxas -v -rdc=true -c main.cu -o main.o
-nvcc -O3 -arch=sm_89 -std=c++17 --use_fast_math -Xptxas -v -rdc=true -c rms_norm_vector.cu -o rms_norm_vector.o
-nvcc -O3 -arch=sm_89 -std=c++17 --use_fast_math -Xptxas -v -rdc=true -o rms_norm_vector_test main.o rms_norm_vector.o
-✓ Compilation successful
-
-Running RMS Norm Vector Tests...
-========================================
-Detected GPU: Compute Capability 8.9
-Compiling for: sm_89 (RTX_4070_Ti_SUPER)
-========================================
-./rms_norm_vector_test
-CSE 554 Assignment 1 - Section 2: RMS Norm Vector Implementation
-================================================================================
-GPU: NVIDIA GeForce RTX 4070 Ti SUPER
-Compute Capability: 8.9
-Peak Memory Bandwidth: 672.06 GB/s
-
-================================================================================
-CORRECTNESS TEST
-================================================================================
-
-Running CPU reference...
-Running CUDA kernel...
-
-First 10 elements:
-Index | Input   | CPU     | CUDA    | Diff
------------------------------------------------
-    0 |  -10.00 | -1.7277 | -1.7277 | 2.38e-07
-    1 |   -9.00 | -1.5550 | -1.5550 | 2.38e-07
-    2 |   -8.00 | -1.3822 | -1.3822 | 1.19e-07
-    3 |   -7.00 | -1.2094 | -1.2094 | 1.19e-07
-    4 |   -6.00 | -1.0366 | -1.0366 | 1.19e-07
-    5 |   -5.00 | -0.8639 | -0.8639 | 1.19e-07
-    6 |   -4.00 | -0.6911 | -0.6911 | 5.96e-08
-    7 |   -3.00 | -0.5183 | -0.5183 | 5.96e-08
-    8 |   -2.00 | -0.3455 | -0.3455 | 2.98e-08
-    9 |   -1.00 | -0.1728 | -0.1728 | 1.49e-08
-  Max difference: 2.38e-07 at index 0
-    CUDA: -1.727737, CPU: -1.727737
-
-✓ Correctness test: PASSED
-
-================================================================================
-PERFORMANCE BENCHMARK (1 x 1048576 vector)
-================================================================================
-Vector size: 1 x 1048576 = 1048576 elements
-Memory per vector: 4.00 MB
-Total memory (in + out): 8.00 MB
-Iterations: 100
-
-Testing RMS Norm Vector kernel...
-  Execution time: 4.5010 ms
-  Bandwidth: 1.86 GB/s (0.3% of peak 672.00 GB/s)
-
-Verifying kernel correctness...
-  Max difference: inf at index 256
-    CUDA: inf, CPU: 1.436468
-✓ Verification: FAILED
-
-================================================================================
-SUMMARY
-================================================================================
-Target bandwidth: > 200 GB/s
-Peak memory bandwidth (datasheet): 672.00 GB/s
-Achieved bandwidth (picked kernel): 1.86 GB/s (0.3% of peak)
-Status: ✗ NEEDS OPTIMIZATION
-================================================================================
-
-✓ All tests complete!
-  Run Nsight Compute: ncu -o profiling_results/rms_norm_vector ./rms_norm_vector_test
-
-========================================
-Detected GPU: Compute Capability 8.9
-Compiling for: sm_89 (RTX_4070_Ti_SUPER)
-========================================
-rm -f main.o rms_norm_vector.o rms_norm_vector_test
-✓ Cleanup complete
-

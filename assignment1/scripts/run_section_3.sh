@@ -66,7 +66,6 @@ if [ "$RUN_QUESTION_NUMBER" -eq 3 ] || [ "$RUN_QUESTION_NUMBER" -eq 9 ]; then
 
     make run-copy
     echo ""
-    
 
     # Profile
     echo "Profiling with Nsight Systems..."

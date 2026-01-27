@@ -49,7 +49,7 @@ void silu_cpu(const float* input, float* output, int n) {
  * Verify CUDA results against CPU reference
  */
 bool verify_result(const float* cuda_result, const float* cpu_result, int n,
-                float tolerance = 1e-5) {
+                float tolerance = 1e-5f) {
     float max_diff = 0.0f;
     int max_diff_idx = 0;
 
@@ -153,7 +153,7 @@ void benchmark_performance() {
     // Initialize input with random values
     srand(42);
     for (int i = 0; i < n; i++) {
-        h_input[i] = ((float)rand() / RAND_MAX) * 20.0f - 10.0f;  // Range: [-10, 10]
+        h_input[i] = ((float)rand() / static_cast<float>(RAND_MAX)) * 20.0f - 10.0f;  // Range: [-10, 10]
     }
 
     // Allocate device memory
@@ -188,7 +188,7 @@ void benchmark_performance() {
     const int verify_size = 10000;
     silu_cpu(h_input, h_output_cpu, verify_size);
 
-    bool passed = verify_result(h_output_cuda, h_output_cpu, verify_size);
+    bool passed = verify_result(h_output_cuda, h_output_cpu, static_cast<int>(verify_size));
     printf("✓ Verification: %s\n", passed ? "PASSED" : "FAILED");
 
     // Summary

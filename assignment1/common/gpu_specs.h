@@ -71,7 +71,7 @@
          cudaDeviceGetAttribute(&memBusWidth, cudaDevAttrGlobalMemoryBusWidth, 0);
          // memClockRate is in kHz, convert to GHz: / 1e6
          // bandwidth = 2 × clock (GHz) × bus_width (bytes)
-         return 2.0f * (memClockRate / 1e6) * (memBusWidth / 8);
+         return 2.0f * (static_cast<float>(memClockRate) / 1e6f) * (static_cast<float>(memBusWidth) / 8.0f);
      }
  }
  

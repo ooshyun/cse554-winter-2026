@@ -60,8 +60,8 @@ void measure_bandwidth(size_t size, int num_iterations, bool use_pinned, FILE* c
 
     float h2d_time_ms;
     CUDA_CHECK(cudaEventElapsedTime(&h2d_time_ms, start, stop));
-    h2d_time_ms /= num_iterations;
-    float h2d_bandwidth = (size / h2d_time_ms) / (1024.0f * 1024.0f);  // MB/s
+    h2d_time_ms /= static_cast<float>(num_iterations);
+    float h2d_bandwidth = (static_cast<float>(size) / h2d_time_ms) / (1024.0f * 1024.0f);  // MB/s
 
     // Measure Device-to-Host
     CUDA_CHECK(cudaEventRecord(start));
@@ -73,8 +73,8 @@ void measure_bandwidth(size_t size, int num_iterations, bool use_pinned, FILE* c
 
     float d2h_time_ms;
     CUDA_CHECK(cudaEventElapsedTime(&d2h_time_ms, start, stop));
-    d2h_time_ms /= num_iterations;
-    float d2h_bandwidth = (size / d2h_time_ms) / (1024.0f * 1024.0f);  // MB/s
+    d2h_time_ms /= static_cast<float>(num_iterations);
+    float d2h_bandwidth = (static_cast<float>(size) / d2h_time_ms) / (1024.0f * 1024.0f);  // MB/s
 
     // Print results
     const char* mem_type = use_pinned ? "pinned" : "pageable";
@@ -197,7 +197,7 @@ int main() {
     float time_ms;
     CUDA_CHECK(cudaEventElapsedTime(&time_ms, start, stop));
     // Convert: (bytes * iterations) / (time_ms / 1000.0) / (1024^3) = GB/s
-    float peak_h2d = ((double)large_size * 100.0 / (double)time_ms * 1000.0) / (1024.0 * 1024.0 * 1024.0);
+    float peak_h2d = static_cast<float>((static_cast<double>(large_size) * 100.0 / static_cast<double>(time_ms) * 1000.0) / (1024.0 * 1024.0 * 1024.0));
 
     // Measure peak D2H
     CUDA_CHECK(cudaEventRecord(start));
@@ -208,7 +208,7 @@ int main() {
     CUDA_CHECK(cudaEventSynchronize(stop));
 
     CUDA_CHECK(cudaEventElapsedTime(&time_ms, start, stop));
-    float peak_d2h = ((double)large_size * 100.0 / (double)time_ms * 1000.0) / (1024.0 * 1024.0 * 1024.0);
+    float peak_d2h = static_cast<float>((static_cast<double>(large_size) * 100.0 / static_cast<double>(time_ms) * 1000.0) / (1024.0 * 1024.0 * 1024.0));
 
     printf("Transfer size: 128 MB\n");
     printf("Peak Host-to-Device (pinned): %.2f GB/s\n", peak_h2d);

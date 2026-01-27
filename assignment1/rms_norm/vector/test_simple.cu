@@ -1,8 +1,5 @@
 #include <cuda_runtime.h>
-#include <cooperative_groups.h>
 #include <stdio.h>
-
-namespace cg = cooperative_groups;
 
 #define CUDA_CHECK(call) \
     do { \

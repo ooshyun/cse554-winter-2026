@@ -23,14 +23,11 @@
 
 // Function declarations
 extern void rms_norm_vector_basic(const float*, float*, int);
-extern void rms_norm_vector_fast(const float*, float*, int);
-extern void rms_norm_vector_safe_v2(const float*, float*, int);
 extern float measure_rms_norm_vector_time(void (*)(const float*, float*, int),
                                           const float*, float*, int, int);
 extern float calculate_rms_norm_vector_bandwidth(int, float);
 
 void (*picked_kernel)(const float*, float*, int) = rms_norm_vector_basic;
-
 
 /**
 * CPU reference implementation of RMS Norm for vector
@@ -44,7 +41,7 @@ void rms_norm_cpu_vector(const float* input, float* output, int n) {
     }
 
     // Compute RMS
-    float rms = sqrtf(sum_sq / n + EPSILON);
+    float rms = sqrtf(sum_sq / static_cast<float>(n) + EPSILON);
 
     // Normalize
     for (int i = 0; i < n; i++) {
@@ -57,7 +54,7 @@ void rms_norm_cpu_vector(const float* input, float* output, int n) {
 * Verify CUDA results against CPU reference
 */
 bool verify_rms_norm_vector(const float* cuda_result, const float* cpu_result,
-                            int n, float tolerance = 1e-3) {
+                            int n, float tolerance = 1e-3f) {
     float max_diff = 0.0f;
     int max_diff_idx = 0;
 
@@ -167,7 +164,7 @@ void benchmark_performance() {
     // Initialize input
     srand(42);
     for (int i = 0; i < n; i++) {
-        h_input[i] = ((float)rand() / RAND_MAX) * 20.0f - 10.0f;
+        h_input[i] = (static_cast<float>(rand()) / static_cast<float>(RAND_MAX)) * 20.0f - 10.0f;
     }
 
     // Allocate device memory
@@ -221,7 +218,7 @@ void benchmark_performance() {
     for (int i = 0; i < n; i++) {
         sum_sq += h_input[i] * h_input[i];
     }
-    float rms = sqrtf(sum_sq / n + EPSILON);
+    float rms = sqrtf(sum_sq / static_cast<float>(n) + EPSILON);
 
     // Normalize subset with full vector RMS
     for (int i = 0; i < verify_size; i++) {
