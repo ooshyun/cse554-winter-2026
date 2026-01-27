@@ -140,41 +140,6 @@ float copy_first_column_naive(const float* h_matrix, float* d_column,
     return time_ms;
 }
 
-/**
- * Optimized approach using cudaMemcpy2D on already-pinned memory
- * Assumes h_pinned_matrix is already in pinned memory (allocated in main)
- */
-float copy_first_column_optimized(float* h_pinned_matrix, float* d_column,
-                                  int rows, int cols) {
-    cudaEvent_t start, stop;
-    CUDA_CHECK(cudaEventCreate(&start));
-    CUDA_CHECK(cudaEventCreate(&stop));
-
-    CUDA_CHECK(cudaEventRecord(start));
-
-    // Copy first column directly from strided pinned memory
-    CUDA_CHECK(cudaMemcpy2D(
-        d_column,                    // dst
-        sizeof(float),               // dst pitch (contiguous)
-        h_pinned_matrix,             // src (already pinned)
-        cols * sizeof(float),        // src pitch (stride between rows)
-        sizeof(float),               // width (1 float)
-        rows,                        // height (number of rows)
-        cudaMemcpyHostToDevice
-    ));
-
-    CUDA_CHECK(cudaEventRecord(stop));
-    CUDA_CHECK(cudaEventSynchronize(stop));
-
-    float time_ms;
-    CUDA_CHECK(cudaEventElapsedTime(&time_ms, start, stop));
-
-    CUDA_CHECK(cudaEventDestroy(start));
-    CUDA_CHECK(cudaEventDestroy(stop));
-
-    return time_ms;
-}
-
 cudaEvent_t g_start, g_stop;
 cudaStream_t g_stream;
 
@@ -247,8 +212,6 @@ int main() {
     // Allocate device memory for column
     float* d_column_naive;
     CUDA_CHECK(cudaMalloc(&d_column_naive, rows * sizeof(float)));
-    float* d_column_optimized;
-    CUDA_CHECK(cudaMalloc(&d_column_optimized, rows * sizeof(float)));
     float* d_column_pre_extracted;
     CUDA_CHECK(cudaMalloc(&d_column_pre_extracted, rows * sizeof(float)));
 
@@ -278,23 +241,7 @@ int main() {
     printf("Average time: %.2f μs\n", avg_time_baseline * 1000.0f);
     printf("Status: %s\n", avg_time_baseline * 1000.0f < 100.0f ? "✓ PASSED" : "✗ FAILED");
 
-
-    // Test optimized: Pinned memory + cudaMemcpy2D
-    printf("\n");
-    printf("================================================================================\n");
-    printf("Optimized: Pinned memory + cudaMemcpy2D\n");
-    printf("================================================================================\n");
-
-    float total_time_optimized = 0.0f;
-    for (int i = 0; i < num_iterations; i++) {
-        total_time_optimized += copy_first_column_optimized(h_pinned_matrix, d_column_optimized, rows, cols);
-    }
-    float avg_time_optimized = total_time_optimized / num_iterations;
-    printf("Average time: %.2f μs\n", avg_time_optimized * 1000.0f);
-    printf("Status: %s\n", avg_time_optimized * 1000.0f < 100.0f ? "✓ PASSED" : "✗ FAILED");
-    printf("Speedup vs baseline: %.2fx\n", avg_time_baseline / avg_time_optimized);
-
-    // Test: Pre-extracted Column
+    // Test: Pre-extracted (Contiguous Copy)
     printf("\n");
     printf("================================================================================\n");
     printf(" Pre-extracted Column (Contiguous Copy)\n");
@@ -313,10 +260,6 @@ int main() {
     float best_time = avg_time_baseline;
     const char* best_method __attribute__((unused)) = "Baseline (naive)";
 
-    if (avg_time_optimized < best_time) {
-        best_time = avg_time_optimized;
-        best_method = "Optimized (Pinned memory + cudaMemcpy2D)";
-    }
     if (avg_time_pre_extracted < best_time) {
         best_time = avg_time_pre_extracted;
         best_method = "Pre-extracted (Contiguous Copy)";
@@ -353,19 +296,6 @@ int main() {
         printf("✓ All values correct for naive method!\n");
     }
 
-    CUDA_CHECK(cudaMemcpy(h_result, d_column_optimized, rows * sizeof(float),
-                        cudaMemcpyDeviceToHost));
-    for (int i = 0; i < rows; i++) {
-        if (h_result[i] != 0.0f) {  // First column should be all 0s
-            printf("✗ Mismatch at row %d: expected 0.0, got %.2f\n", i, h_result[i]);
-            correct = false;
-            break;
-        }
-    }
-    if (correct) {
-        printf("✓ All values correct for optimized method!\n");
-    }
-
     CUDA_CHECK(cudaMemcpy(h_result, d_column_pre_extracted, rows * sizeof(float),
                         cudaMemcpyDeviceToHost));
     for (int i = 0; i < rows; i++) {
@@ -386,14 +316,10 @@ int main() {
     printf("================================================================================\n");
     printf("Target: < 100 μs\n");
     printf("\n");
-    printf("Baseline (cudaMemcpy2DAsync):     %.2f μs %s\n",
+    printf("Baseline (Naive):     %.2f μs %s\n",
            avg_time_baseline * 1000.0f,
            avg_time_baseline * 1000.0f < 100.0f ? "✓" : "✗");
-    printf("Optimized (Pinned memory + cudaMemcpy2D):     %.2f μs %s (%.2fx speedup)\n",
-           avg_time_optimized * 1000.0f,
-           avg_time_optimized * 1000.0f < 100.0f ? "✓" : "✗",
-           avg_time_baseline / avg_time_optimized);
-    printf("My method (Pre-extracted):         %.2f μs %s (%.2fx speedup)\n",
+    printf("Pre-extracted (Contiguous Copy):         %.2f μs %s (%.2fx speedup)\n",
            avg_time_pre_extracted * 1000.0f,
            avg_time_pre_extracted * 1000.0f < 100.0f ? "✓" : "✗",
            avg_time_baseline / avg_time_pre_extracted);
@@ -407,7 +333,6 @@ int main() {
 
     free(h_matrix);
     CUDA_CHECK(cudaFree(d_column_naive));
-    CUDA_CHECK(cudaFree(d_column_optimized));
     CUDA_CHECK(cudaFree(d_column_pre_extracted));
 
     printf("\n✓ First column copy tests complete!\n");
