@@ -23,6 +23,7 @@
 
 // Function declarations
 extern void rms_norm_vector_basic(const float*, float*, int);
+extern void rms_norm_vector_coop(const float*, float*, int);
 extern float measure_rms_norm_vector_time(void (*)(const float*, float*, int),
                                           const float*, float*, int, int);
 extern float calculate_rms_norm_vector_bandwidth(int, float);
