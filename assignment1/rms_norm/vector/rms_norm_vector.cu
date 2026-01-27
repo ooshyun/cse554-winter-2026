@@ -293,35 +293,48 @@ void rms_norm_vector_coop(const float* d_input, float* d_output, int n) {
     CUDA_CHECK(cudaGetLastError());
 }
 
+ // Static buffers for kernel wrappers (avoid per-call malloc overhead)
+ static float* g_basic_partial_sums = nullptr;
+ static int g_basic_allocated_blocks = 0;
+
+ /**
+  * Cleanup function for static buffers
+  * Call before program exit or when switching contexts
+  */
+ void rms_norm_vector_cleanup() {
+    if (g_basic_partial_sums != nullptr) {
+        cudaFree(g_basic_partial_sums);
+        g_basic_partial_sums = nullptr;
+        g_basic_allocated_blocks = 0;
+    }
+ }
+
  /**
   * Wrapper functions
   * Uses static allocation to avoid cudaMalloc/cudaFree overhead per call
   */
  void rms_norm_vector_basic(const float* d_input, float* d_output, int n) {
-    static float* d_partial_sums = nullptr;
-    static int allocated_blocks = 0;
-
     int block_size = 256;
     int num_blocks = min((n + block_size - 1) / block_size, 1024);
 
     // Allocate only once (or reallocate if more blocks needed)
-    if (d_partial_sums == nullptr || num_blocks > allocated_blocks) {
-        if (d_partial_sums != nullptr) {
-            CUDA_CHECK(cudaFree(d_partial_sums));
+    if (g_basic_partial_sums == nullptr || num_blocks > g_basic_allocated_blocks) {
+        if (g_basic_partial_sums != nullptr) {
+            CUDA_CHECK(cudaFree(g_basic_partial_sums));
         }
-        CUDA_CHECK(cudaMalloc(&d_partial_sums, num_blocks * sizeof(float)));
-        allocated_blocks = num_blocks;
+        CUDA_CHECK(cudaMalloc(&g_basic_partial_sums, num_blocks * sizeof(float)));
+        g_basic_allocated_blocks = num_blocks;
     }
 
     size_t shared_mem = static_cast<size_t>(block_size / 32) * sizeof(float);
 
     // Phase 1: Compute partial sums
     rms_norm_vector_phase1<<<num_blocks, block_size, shared_mem>>>(
-        d_input, d_partial_sums, n);
+        d_input, g_basic_partial_sums, n);
 
     // Phase 2: Normalize (no cudaDeviceSynchronize needed - implicit dependency)
     rms_norm_vector_phase2<<<num_blocks, block_size>>>(
-        d_input, d_output, d_partial_sums, n, num_blocks);
+        d_input, d_output, g_basic_partial_sums, n, num_blocks);
 }
 
 
