@@ -108,7 +108,7 @@ void test_correctness() {
 
     // Run CUDA kernel
     printf("Running CUDA kernel...\n");
-    rms_norm_vector_fast(d_input, d_output, n);
+    picked_kernel(d_input, d_output, n);
     CUDA_CHECK(cudaMemcpy(h_output_cuda, d_output, n * sizeof(float),
                           cudaMemcpyDeviceToHost));
 
