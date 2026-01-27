@@ -39,14 +39,12 @@ PROFILE_TARGET = $(TARGET)_profile
 
 # Run the test
 run: $(TARGET)
-	./$(TARGET)
+	CUDA_VISIBLE_DEVICES=$(GPU_ID) ./$(TARGET)
 
 # Profile
 profile: $(PROFILE_TARGET)
-# @timestamp=$$(date +%Y%m%d_%H%M%S); \
-# nsys profile -o ../profiling_results/cuda_silu_$$timestamp ./$(PROFILE_TARGET)
 	@timestamp=$$(date +%Y%m%d_%H%M%S); \
-	ncu -o ../profiling_results/cuda_silu_$$timestamp --set full ./$(PROFILE_TARGET)
+	CUDA_VISIBLE_DEVICES=$(GPU_ID) ncu -o ../profiling_results/cuda_silu_$$timestamp --set full ./$(PROFILE_TARGET)
 
 # Build profile target
 $(PROFILE_TARGET): $(PROFILE_OBJECTS)

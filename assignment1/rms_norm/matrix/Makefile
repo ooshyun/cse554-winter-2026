@@ -30,14 +30,12 @@ PROFILE_OBJECTS = $(SOURCES:.cu=.profile.o)
 PROFILE_TARGET = $(TARGET)_profile
 
 run: $(TARGET)
-	./$(TARGET)
+	CUDA_VISIBLE_DEVICES=$(GPU_ID) ./$(TARGET)
 
 profile: $(PROFILE_TARGET)
 	mkdir -p profiling_results
-# @timestamp=$$(date +%Y%m%d_%H%M%S); \
-# nsys profile -o profiling_results/rms_norm_matrix_$$timestamp ./$(PROFILE_TARGET)
 	@timestamp=$$(date +%Y%m%d_%H%M%S); \
-	ncu -o profiling_results/rms_norm_matrix_$$timestamp --set full ./$(PROFILE_TARGET)
+	CUDA_VISIBLE_DEVICES=$(GPU_ID) ncu -o profiling_results/rms_norm_matrix_$$timestamp --set full ./$(PROFILE_TARGET)
 
 # Build profile target
 $(PROFILE_TARGET): $(PROFILE_OBJECTS)

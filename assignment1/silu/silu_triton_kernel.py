@@ -1,12 +1,11 @@
-import torch
-import triton
-import triton.language as tl
-
-
 """
 CSE 554 Assignment 1 - Section 1: SiLU Implementation in Triton
 Custom Triton kernel for SiLU activation function
 """
+
+import sys
+sys.path.insert(0, '../..')  # Add project root for gpu_config
+import gpu_config  # noqa: F401 - Auto-configures CUDA_VISIBLE_DEVICES
 
 import torch
 import triton

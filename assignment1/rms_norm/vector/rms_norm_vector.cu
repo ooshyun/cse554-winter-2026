@@ -46,11 +46,11 @@
  
  
  /**
-  * ORIGINAL Basic two-phase RMS Norm for long vector
-  * Phase 1: Compute partial sums of squares across blocks
+  * Optimized Phase 1: Compute partial sums AND copy input to output
+  * This avoids reading input twice (once here, once in phase2)
   */
  __global__ void rms_norm_vector_phase1(const float* input, float* partial_sums,
-                                         int n) {
+                                         float* output, int n) {
      extern __shared__ float shared[];
 
      int tid = threadIdx.x;
@@ -59,9 +59,11 @@
      int lane_id = tid % 32;
 
      // Each thread computes partial sum with grid-stride loop
+     // AND copies input to output for phase2
      float sum = 0.0f;
      for (int i = blockIdx.x * block_size + tid; i < n; i += gridDim.x * block_size) {
          float val = input[i];
+         output[i] = val;  // Copy to output (will be normalized in-place by phase2)
          sum += val * val;
      }
 
@@ -86,48 +88,30 @@
  }
 
  /**
-  * ORIGINAL Basic Phase 2: Normalize using global RMS
+  * Optimized Phase 2: Normalize in-place (output already contains input values)
   */
-__global__ void rms_norm_vector_phase2(const float* input, float* output,
+__global__ void rms_norm_vector_phase2(float* output,
                                         const float* partial_sums, int n,
                                         int num_blocks) {
-    // // Each block independently computes global RMS (redundant but safe)
-    // __shared__ float global_rms;
+    __shared__ float sdata[256];
 
-    // if (threadIdx.x == 0) {
-    //     float total_sum = 0.0f;
-    //     for (int i = 0; i < num_blocks; i++) {
-    //         total_sum += partial_sums[i];
-    //     }
-    //     global_rms = sqrtf(total_sum / n + EPSILON);
-    // }
-    // __syncthreads();
-
-    // // Normalize
-    // int block_size = blockDim.x;
-    // for (int i = blockIdx.x * block_size + threadIdx.x; i < n;
-    //     i += gridDim.x * block_size) {
-    //     output[i] = input[i] / global_rms;
-    // }
-    __shared__ float sdata[256];  // blockDim.x 크기
-    
-    // ========== 1. 모든 스레드가 partial_sums를 나눠서 로드 ==========
+    // ========== 1. Load partial_sums in parallel ==========
     float local_sum = 0.0f;
     for (int i = threadIdx.x; i < num_blocks; i += blockDim.x) {
         local_sum += partial_sums[i];
     }
     sdata[threadIdx.x] = local_sum;
-    __syncthreads();  // 이제 workload가 균등함
-    
-    // ========== 2. Shared memory에서 parallel reduction ==========
+    __syncthreads();
+
+    // ========== 2. Parallel reduction in shared memory ==========
     for (int stride = blockDim.x / 2; stride > 32; stride >>= 1) {
         if (threadIdx.x < stride) {
             sdata[threadIdx.x] += sdata[threadIdx.x + stride];
         }
         __syncthreads();
     }
-    
-    // ========== 3. 마지막 warp는 warp-level reduction (더 빠름) ==========
+
+    // ========== 3. Final warp-level reduction ==========
     if (threadIdx.x < 32) {
         volatile float* vsdata = sdata;
         vsdata[threadIdx.x] += vsdata[threadIdx.x + 32];
@@ -137,17 +121,18 @@ __global__ void rms_norm_vector_phase2(const float* input, float* output,
         vsdata[threadIdx.x] += vsdata[threadIdx.x + 2];
         vsdata[threadIdx.x] += vsdata[threadIdx.x + 1];
     }
-    
+
     __shared__ float global_rms;
     if (threadIdx.x == 0) {
         global_rms = sqrtf(sdata[0] / n + EPSILON);
     }
     __syncthreads();
-    
-    // ========== 4. Normalize ==========
+
+    // ========== 4. Normalize in-place (output already has input values) ==========
+    float rms_val = global_rms;
     for (int i = blockIdx.x * blockDim.x + threadIdx.x; i < n;
          i += gridDim.x * blockDim.x) {
-        output[i] = input[i] / global_rms;
+        output[i] = output[i] / rms_val;
     }
 }
 
@@ -328,13 +313,13 @@ void rms_norm_vector_coop(const float* d_input, float* d_output, int n) {
 
     size_t shared_mem = static_cast<size_t>(block_size / 32) * sizeof(float);
 
-    // Phase 1: Compute partial sums
+    // Phase 1: Compute partial sums AND copy input to output
     rms_norm_vector_phase1<<<num_blocks, block_size, shared_mem>>>(
-        d_input, g_basic_partial_sums, n);
+        d_input, g_basic_partial_sums, d_output, n);
 
-    // Phase 2: Normalize (no cudaDeviceSynchronize needed - implicit dependency)
+    // Phase 2: Normalize in-place (output already contains input values)
     rms_norm_vector_phase2<<<num_blocks, block_size>>>(
-        d_input, d_output, g_basic_partial_sums, n, num_blocks);
+        d_output, g_basic_partial_sums, n, num_blocks);
 }
 
 
@@ -393,6 +378,9 @@ void rms_norm_vector_coop(const float* d_input, float* d_output, int n) {
  
  
  float calculate_rms_norm_vector_bandwidth(int n, float time_ms) {
+     // Effective memory: input read (n) + output write (n) = 2n
+     // Note: Implementation reads input twice (phase1 + phase2), but we measure
+     // effective bandwidth (algorithm's minimum required data movement)
      size_t bytes = 2 * (size_t)n * sizeof(float);
      float time_s = time_ms / 1000.0f;
 

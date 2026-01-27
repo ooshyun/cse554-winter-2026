@@ -3,6 +3,10 @@ CSE 554 Assignment 1 - Section 1: SiLU Triton Kernel Testing
 Test suite for Triton SiLU implementation
 """
 
+import sys
+sys.path.insert(0, '../..')  # Add project root for gpu_config
+import gpu_config  # noqa: F401 - Auto-configures CUDA_VISIBLE_DEVICES
+
 import torch
 from silu_triton_kernel import silu_triton, benchmark_triton_silu
 

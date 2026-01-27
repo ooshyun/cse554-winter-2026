@@ -33,25 +33,21 @@ $(PROFILE_FIRST_COLUMN): copy_first_column.cu
 	$(NVCC) $(NVCC_FLAGS) $(PROFILE_FLAGS) -o $@ $< $(LINK_FLAGS)
 
 run-memory: $(MEMORY_TRANSFER)
-	./$(MEMORY_TRANSFER)
+	CUDA_VISIBLE_DEVICES=$(GPU_ID) ./$(MEMORY_TRANSFER)
 
 run-copy: $(FIRST_COLUMN)
-	./$(FIRST_COLUMN)
+	CUDA_VISIBLE_DEVICES=$(GPU_ID) ./$(FIRST_COLUMN)
 
 # Profile first column copy with Nsight Systems
 profile-copy: $(PROFILE_FIRST_COLUMN)
 	mkdir -p profiling_results
 	@timestamp=$$(date +%Y%m%d_%H%M%S); \
-	nsys profile -o profiling_results/$$timestamp ./$(PROFILE_FIRST_COLUMN)
-	# @timestamp=$$(date +%Y%m%d_%H%M%S); \
-	# ncu -o profiling_results/$$timestamp --set full ./$(PROFILE_FIRST_COLUMN)
+	CUDA_VISIBLE_DEVICES=$(GPU_ID) nsys profile -o profiling_results/$$timestamp ./$(PROFILE_FIRST_COLUMN)
 
 profile-memory: $(PROFILE_MEMORY_TRANSFER)
 	mkdir -p profiling_results
 	@timestamp=$$(date +%Y%m%d_%H%M%S); \
-	nsys profile -o profiling_results/$$timestamp ./$(PROFILE_MEMORY_TRANSFER)
-	# @timestamp=$$(date +%Y%m%d_%H%M%S); \
-	# ncu -o profiling_results/$$timestamp --set full ./$(PROFILE_MEMORY_TRANSFER)
+	CUDA_VISIBLE_DEVICES=$(GPU_ID) nsys profile -o profiling_results/$$timestamp ./$(PROFILE_MEMORY_TRANSFER)
 
 clean:
 	rm -f $(MEMORY_TRANSFER) $(FIRST_COLUMN) $(PROFILE_MEMORY_TRANSFER) $(PROFILE_FIRST_COLUMN)

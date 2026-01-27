@@ -3,6 +3,11 @@
 
 NVCC = nvcc
 
+# GPU selection: Use GPU 6 if 8+ GPUs detected (RTX 6000 server), otherwise GPU 0
+NUM_GPUS := $(shell nvidia-smi -L 2>/dev/null | wc -l)
+GPU_ID ?= $(shell [ $(NUM_GPUS) -ge 8 ] && echo 6 || echo 0)
+export CUDA_VISIBLE_DEVICES=$(GPU_ID)
+
 # Detect GPU compute capability
 CUDA_DEVICE_QUERY := $(shell nvidia-smi --query-gpu=compute_cap --format=csv,noheader | head -1)
 COMPUTE_CAP_MAJOR := $(shell echo $(CUDA_DEVICE_QUERY) | cut -d'.' -f1)
@@ -52,6 +57,7 @@ LINK_FLAGS = -cudart static
 
 # Print detected configuration
 $(info ========================================)
-$(info Detected GPU: Compute Capability $(COMPUTE_CAP_MAJOR).$(COMPUTE_CAP_MINOR))
+$(info Detected GPUs: $(NUM_GPUS), Using GPU: $(GPU_ID))
+$(info Compute Capability: $(COMPUTE_CAP_MAJOR).$(COMPUTE_CAP_MINOR))
 $(info Compiling for: $(SM_ARCH) ($(GPU_NAME)))
 $(info ========================================)
