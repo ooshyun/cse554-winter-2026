@@ -25,8 +25,6 @@
 extern void rms_norm_matrix_basic(const float*, float*, int, int);
 extern void rms_norm_matrix_optimized(const float*, float*, int, int);
 extern void rms_norm_matrix_fast(const float*, float*, int, int);
-extern void rms_norm_matrix_w2l3_reduction(const float*, float*, int, int);
-extern void rms_norm_matrix_w2l3_tile(const float*, float*, int, int);
 extern void rms_norm_matrix_w2l3_hybrid(const float*, float*, int, int);
 extern float measure_rms_norm_time(void (*)(const float*, float*, int, int),
                                 const float*, float*, int, int, int);

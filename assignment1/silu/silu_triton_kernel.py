@@ -4,7 +4,6 @@ Custom Triton kernel for SiLU activation function
 """
 
 import sys
-sys.path.insert(0, '../..')  # Add project root for gpu_config
 import gpu_config  # noqa: F401 - Auto-configures CUDA_VISIBLE_DEVICES
 
 import torch

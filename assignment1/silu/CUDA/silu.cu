@@ -65,31 +65,7 @@
          }
      }
  }
- 
- 
- /**
-  * Highly optimized SiLU kernel
-  * - Vectorized memory access (float4)
-  * - Optimized block size
-  * - Reduced register pressure
-  */
- __global__ void silu_kernel_fast(const float4* input, float4* output, int n_vec) {
-     int idx = blockIdx.x * blockDim.x + threadIdx.x;
- 
-     if (idx < n_vec) {
-         float4 x = input[idx];
- 
-         // Compute SiLU using direct formula: x / (1 + exp(-x))
-         float4 result;
-         result.x = x.x / (1.0f + __expf(-x.x));
-         result.y = x.y / (1.0f + __expf(-x.y));
-         result.z = x.z / (1.0f + __expf(-x.z));
-         result.w = x.w / (1.0f + __expf(-x.w));
- 
-         output[idx] = result;
-     }
- }
- 
+
  
  /**
   * Wrapper function for basic SiLU kernel
@@ -113,32 +89,6 @@
  
      silu_kernel_optimized<<<grid_size, block_size>>>(d_input, d_output, n);
      CUDA_CHECK(cudaGetLastError());
- }
- 
- 
- /**
-  * Wrapper function for fast SiLU kernel
-  */
- void silu_cuda_fast(const float* d_input, float* d_output, int n) {
-     // Ensure n is divisible by 4 for float4
-     int n_vec = n / 4;
-     int block_size = 256;
-     int grid_size = (n_vec + block_size - 1) / block_size;
- 
-     silu_kernel_fast<<<grid_size, block_size>>>(
-         reinterpret_cast<const float4*>(d_input),
-         reinterpret_cast<float4*>(d_output),
-         n_vec
-     );
-     CUDA_CHECK(cudaGetLastError());
- 
-     // Handle remaining elements if n is not divisible by 4
-     int remaining = n % 4;
-     if (remaining > 0) {
-         int start_idx = n - remaining;
-         silu_kernel_basic<<<1, remaining>>>(d_input + start_idx, d_output + start_idx, remaining);
-         CUDA_CHECK(cudaGetLastError());
-     }
  }
  
  

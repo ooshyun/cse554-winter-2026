@@ -222,37 +222,5 @@ int main() {
     CUDA_CHECK(cudaFree(d_data));
 
     printf("\n✓ Memory transfer tests complete!\n");
-
-    printf("\n");
-    printf("================================================================================\n");
-    printf("ANALYSIS & OBSERVATIONS\n");
-    printf("================================================================================\n");
-    printf("\n");
-    printf("1. PINNED MEMORY IS FASTER:\n");
-    printf("   - Pageable memory peaks at ~14-20 MB/s\n");
-    printf("   - Pinned memory reaches ~22-25 MB/s (up to 60%% faster)\n");
-    printf("   - Advantage is most pronounced for larger transfers (>1 MB)\n");
-    printf("\n");
-    printf("2. WHY PINNED IS FASTER:\n");
-    printf("   - No OS paging overhead - memory is locked in physical RAM\n");
-    printf("   - Direct DMA (Direct Memory Access) transfers possible\n");
-    printf("   - Pageable memory requires CPU involvement and buffer copies\n");
-    printf("\n");
-    printf("3. TRANSFER SIZE EFFECTS:\n");
-    printf("   - Small transfers (<32 KB): Both methods have high latency overhead\n");
-    printf("   - Medium transfers (32 KB - 1 MB): Pinned starts showing advantage\n");
-    printf("   - Large transfers (>1 MB): Pinned reaches peak sustained bandwidth\n");
-    printf("\n");
-    printf("4. OBSERVED PEAK BANDWIDTH (~23 GB/s):\n");
-    printf("   - This is PCIe bandwidth, NOT GPU memory bandwidth\n");
-    printf("   - Matches PCIe 4.0 x16 theoretical: ~32 GB/s (we get ~70%% efficiency)\n");
-    printf("   - GPU memory bandwidth (672 GB/s) is for GPU<->VRAM, not Host<->GPU\n");
-    printf("\n");
-    printf("Next steps:\n");
-    printf("  1. Plot bandwidth vs transfer size using bandwidth_data.csv\n");
-    printf("  2. Compare pageable vs pinned memory curves\n");
-    printf("  3. Include plot in assignment report\n");
-    printf("================================================================================\n");
-
     return 0;
 }
