@@ -20,7 +20,7 @@ SOURCES = main.cu copy_first_column.cu
 OBJECTS = $(SOURCES:.cu=.o)
 
 # Memory transfer benchmark
-$(HOST_GPU): $(OBJECTS) $(HEADERS)
+$(HOST_GPU): $(OBJECTS)
 	$(NVCC) $(NVCC_FLAGS) -o $@ $(OBJECTS) $(LINK_FLAGS)
 
 # Compile source files
@@ -38,7 +38,7 @@ PROFILE_OBJECTS = $(SOURCES:.cu=.profile.o)
 PROFILE_HOST_GPU = $(HOST_GPU)_profile
 
 # Build profile targets
-$(PROFILE_HOST_GPU): $(PROFILE_OBJECTS) $(HEADERS)
+$(PROFILE_HOST_GPU): $(PROFILE_OBJECTS)
 	$(NVCC) $(NVCC_FLAGS) $(PROFILE_FLAGS) -o $@ $(PROFILE_OBJECTS) $(LINK_FLAGS)
 
 run: $(HOST_GPU)

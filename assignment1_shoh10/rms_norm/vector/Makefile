@@ -18,7 +18,7 @@ PROFILE_FLAGS = -DPROFILE_NCUS
 
 all: $(TARGET)
 
-$(TARGET): $(OBJECTS) $(HEADERS)
+$(TARGET): $(OBJECTS)
 	$(NVCC) $(NVCC_FLAGS) -o $@ $^ $(LINK_FLAGS)
 
 %.o: %.cu
@@ -45,7 +45,7 @@ profile: $(PROFILE_TARGET)
 	CUDA_VISIBLE_DEVICES=$(GPU_ID) ncu -o profiling_results/rms_norm_vector_$$timestamp --set full ./$(PROFILE_TARGET)
 
 # Build profile target
-$(PROFILE_TARGET): $(PROFILE_OBJECTS) $(HEADERS)
+$(PROFILE_TARGET): $(PROFILE_OBJECTS)
 	$(NVCC) $(NVCC_FLAGS) $(PROFILE_FLAGS) -o $@ $^ $(LINK_FLAGS)
 
 clean:
