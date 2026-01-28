@@ -47,8 +47,8 @@ def profile_silu():
     with profile(
         activities=[ProfilerActivity.CPU, ProfilerActivity.CUDA],
         record_shapes=True,
-        profile_memory=True,
-        with_stack=True
+        # profile_memory=True,
+        # with_stack=True
     ) as prof:
         for _ in range(100):
             result = silu_torch(x)
@@ -58,11 +58,28 @@ def profile_silu():
     prof.export_chrome_trace("silu/profiling_results/torch_silu.json")
     print("\nTorch Profiler results saved to: silu/profiling_results/torch_silu.json")
 
-    # Print profiler summary
-    print("\n" + "="*80)
+    # # Print profiler summary
+    # print("\n" + "="*80)
+    # print("TORCH PROFILER SUMMARY")
+    # print("="*80)
+    # print(prof.key_averages().table(sort_by="cuda_time_total", row_limit=10))
+
+    # 1. CPU Operations 요약 (스크린샷 1)
+    print("=" * 80)
     print("TORCH PROFILER SUMMARY")
-    print("="*80)
-    print(prof.key_averages().table(sort_by="cuda_time_total", row_limit=10))
+    print("=" * 80)
+    print("CPU Operations Summary")
+    print("=" * 80)
+    print(prof.key_averages().table(sort_by="cpu_time_total", row_limit=20))
+
+    # 2. CUDA Kernels 요약 (스크린샷 2) - 가장 중요!
+    print("\n" + "=" * 80)
+    print("CUDA Kernel Summary")
+    print("=" * 80)
+    print(prof.key_averages().table(sort_by="cuda_time_total", row_limit=20))
+
+    # 3. Chrome trace 파일 저장 (선택사항)
+    prof.export_chrome_trace("torch_silu_trace.json")
 
     # Measure execution time for bandwidth calculation using CUDA Events
     num_iterations = 1000
