@@ -9,6 +9,7 @@ TARGET = silu_test
 
 # Source files
 SOURCES = main.cu silu.cu
+HEADERS = silu.h
 
 # Object files
 OBJECTS = $(SOURCES:.cu=.o)
@@ -20,15 +21,15 @@ PROFILE_FLAGS = -DPROFILE_NCUS
 all: $(TARGET)
 
 # Link object files
-$(TARGET): $(OBJECTS)
+$(TARGET): $(OBJECTS) $(HEADERS)
 	$(NVCC) $(NVCC_FLAGS) -o $@ $^ $(LINK_FLAGS)
 
 # Compile source files
-%.o: %.cu
+%.o: %.cu $(HEADERS)
 	$(NVCC) $(NVCC_FLAGS) -c $< -o $@
 
 # Compile source files with profiling flags
-%.profile.o: %.cu
+%.profile.o: %.cu $(HEADERS)
 	$(NVCC) $(NVCC_FLAGS) $(PROFILE_FLAGS) -c $< -o $@
 
 # Profile object files
@@ -47,7 +48,7 @@ profile: $(PROFILE_TARGET)
 	CUDA_VISIBLE_DEVICES=$(GPU_ID) ncu -o ../profiling_results/cuda_silu_$$timestamp --set full ./$(PROFILE_TARGET)
 
 # Build profile target
-$(PROFILE_TARGET): $(PROFILE_OBJECTS)
+$(PROFILE_TARGET): $(PROFILE_OBJECTS) $(HEADERS)
 	$(NVCC) $(NVCC_FLAGS) $(PROFILE_FLAGS) -o $@ $^ $(LINK_FLAGS)
 
 # Clean build files

@@ -7,20 +7,21 @@ include ../../../common.mk
 TARGET = rms_norm_matrix_test
 SOURCES = main.cu rms_norm_matrix.cu
 OBJECTS = $(SOURCES:.cu=.o)
+HEADERS = rms_norm_matrix.h
 
 # FLAG for Nsight Compute profiling
 PROFILE_FLAGS = -DPROFILE_NCUS
 
 all: $(TARGET)
 
-$(TARGET): $(OBJECTS)
+$(TARGET): $(OBJECTS) $(HEADERS)
 	$(NVCC) $(NVCC_FLAGS) -o $@ $^ $(LINK_FLAGS)
 
-%.o: %.cu
+%.o: %.cu $(HEADERS)
 	$(NVCC) $(NVCC_FLAGS) -c $< -o $@
 
 # Compile source files with profiling flags
-%.profile.o: %.cu
+%.profile.o: %.cu $(HEADERS)
 	$(NVCC) $(NVCC_FLAGS) $(PROFILE_FLAGS) -c $< -o $@
 
 # Profile object files
@@ -38,7 +39,7 @@ profile: $(PROFILE_TARGET)
 	CUDA_VISIBLE_DEVICES=$(GPU_ID) ncu -o profiling_results/rms_norm_matrix_$$timestamp --set full ./$(PROFILE_TARGET)
 
 # Build profile target
-$(PROFILE_TARGET): $(PROFILE_OBJECTS)
+$(PROFILE_TARGET): $(PROFILE_OBJECTS) $(HEADERS)
 	$(NVCC) $(NVCC_FLAGS) $(PROFILE_FLAGS) -o $@ $^ $(LINK_FLAGS)
 
 clean:

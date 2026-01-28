@@ -5,53 +5,53 @@
 include ../../common.mk
 
 # Targets
-MEMORY_TRANSFER = memory_transfer_test
-FIRST_COLUMN = copy_first_column_test
+HOST_GPU = host_GPU_test
 
 # FLAG for Nsight Compute profiling
 PROFILE_FLAGS = -DPROFILE_NCUS
 
-all: $(MEMORY_TRANSFER) $(FIRST_COLUMN)
+all: $(HOST_GPU)
+
+# Header
+HEADERS = copy_first_column.h
+
+# Source files
+SOURCES = main.cu copy_first_column.cu
+OBJECTS = $(SOURCES:.cu=.o)
 
 # Memory transfer benchmark
-$(MEMORY_TRANSFER): memory_transfer.cu
-	$(NVCC) $(NVCC_FLAGS) -o $@ $< $(LINK_FLAGS)
+$(HOST_GPU): $(OBJECTS) $(HEADERS)
+	$(NVCC) $(NVCC_FLAGS) -o $@ $(OBJECTS) $(LINK_FLAGS)
 
-# First column copy
-$(FIRST_COLUMN): copy_first_column.cu
-	$(NVCC) $(NVCC_FLAGS) -o $@ $< $(LINK_FLAGS)
+# Compile source files
+%.o: %.cu $(HEADERS)
+	$(NVCC) $(NVCC_FLAGS) -c $< -o $@
+
+# Compile source files with profiling flags
+%.profile.o: %.cu $(HEADERS)
+	$(NVCC) $(NVCC_FLAGS) $(PROFILE_FLAGS) -c $< -o $@
+
+# Profile object files
+PROFILE_OBJECTS = $(SOURCES:.cu=.profile.o)
 
 # Profile target executables
-PROFILE_MEMORY_TRANSFER = $(MEMORY_TRANSFER)_profile
-PROFILE_FIRST_COLUMN = $(FIRST_COLUMN)_profile
+PROFILE_HOST_GPU = $(HOST_GPU)_profile
 
 # Build profile targets
-$(PROFILE_MEMORY_TRANSFER): memory_transfer.cu
-	$(NVCC) $(NVCC_FLAGS) $(PROFILE_FLAGS) -o $@ $< $(LINK_FLAGS)
+$(PROFILE_HOST_GPU): $(PROFILE_OBJECTS) $(HEADERS)
+	$(NVCC) $(NVCC_FLAGS) $(PROFILE_FLAGS) -o $@ $(PROFILE_OBJECTS) $(LINK_FLAGS)
 
-$(PROFILE_FIRST_COLUMN): copy_first_column.cu
-	$(NVCC) $(NVCC_FLAGS) $(PROFILE_FLAGS) -o $@ $< $(LINK_FLAGS)
-
-run-memory: $(MEMORY_TRANSFER)
+run: $(HOST_GPU)
 	CUDA_VISIBLE_DEVICES=$(GPU_ID) ./$(MEMORY_TRANSFER)
 
-run-copy: $(FIRST_COLUMN)
-	CUDA_VISIBLE_DEVICES=$(GPU_ID) ./$(FIRST_COLUMN)
-
 # Profile first column copy with Nsight Systems
-profile-copy: $(PROFILE_FIRST_COLUMN)
+profile: $(HOST_GPU)
 	mkdir -p profiling_results
 	@timestamp=$$(date +%Y%m%d_%H%M%S); \
-	CUDA_VISIBLE_DEVICES=$(GPU_ID) nsys profile -o profiling_results/$$timestamp ./$(PROFILE_FIRST_COLUMN)
-
-profile-memory: $(PROFILE_MEMORY_TRANSFER)
-	mkdir -p profiling_results
-	@timestamp=$$(date +%Y%m%d_%H%M%S); \
-	CUDA_VISIBLE_DEVICES=$(GPU_ID) nsys profile -o profiling_results/$$timestamp ./$(PROFILE_MEMORY_TRANSFER)
+	CUDA_VISIBLE_DEVICES=$(GPU_ID) nsys profile -o profiling_results/$$timestamp ./$(HOST_GPU)
 
 clean:
-	rm -f $(MEMORY_TRANSFER) $(FIRST_COLUMN) $(PROFILE_MEMORY_TRANSFER) $(PROFILE_FIRST_COLUMN)
-	rm -f bandwidth_data.csv
+	rm -f $(OBJECTS) $(HOST_GPU) $(PROFILE_OBJECTS) $(PROFILE_HOST_GPU)
 
 cleanall: clean
 	rm -f profiling_results/copy.*
