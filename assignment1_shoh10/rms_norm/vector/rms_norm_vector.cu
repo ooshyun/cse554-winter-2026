@@ -5,13 +5,14 @@
  *
  */
 
- #include <cuda_runtime.h>
- #include <cooperative_groups.h>
- #include <device_launch_parameters.h>
- #include <stdio.h>
- #include <math.h>
- #include "../../common/gpu_specs.h"
- 
+#include "rms_norm_vector.h"
+#include <cuda_runtime.h>
+#include <cooperative_groups.h>
+#include <device_launch_parameters.h>
+#include <stdio.h>
+#include <math.h>
+#include "../../common/gpu_specs.h"
+
 // // __global__ void rms_norm_vector_kernel(...) {
 // // }
 
@@ -19,21 +20,21 @@
 // void rms_norm_vector(float *input, float *weight, float *output, int cols, float epsilon) {
 // }
 
- namespace cg = cooperative_groups;
- 
- #define CUDA_CHECK(call) \
-     do { \
-         cudaError_t err = call; \
-         if (err != cudaSuccess) { \
-             fprintf(stderr, "CUDA error in %s:%d: %s\n", __FILE__, __LINE__, \
-                     cudaGetErrorString(err)); \
-             exit(EXIT_FAILURE); \
-         } \
-     } while(0)
- 
- #define EPSILON 1e-6f
- 
- 
+namespace cg = cooperative_groups;
+
+#define CUDA_CHECK(call) \
+    do { \
+        cudaError_t err = call; \
+        if (err != cudaSuccess) { \
+            fprintf(stderr, "CUDA error in %s:%d: %s\n", __FILE__, __LINE__, \
+                    cudaGetErrorString(err)); \
+            exit(EXIT_FAILURE); \
+        } \
+    } while(0)
+
+#define EPSILON 1e-6f
+
+
  /**
   * Device function for warp-level reduction
   */
@@ -222,83 +223,12 @@ __global__ void rms_norm_vector_single_kernel(const float* input, float* output,
 }
 
 /**
- * Wrapper function for single-kernel version using cooperative launch
- * Uses static allocation to avoid repeated malloc/free overhead
+ * Wrapper functions
+ * Uses static allocation to avoid cudaMalloc/cudaFree overhead per call
  */
-void rms_norm_vector_coop(const float* d_input, float* d_output, int n) {
-    static float* d_partial_sums = nullptr;
-    static int allocated_blocks = 0;
-    static int cached_num_blocks = 0;
-
-    int block_size = 256;
-
-    // Only query occupancy once
-    if (cached_num_blocks == 0) {
-        int num_blocks_per_sm;
-        CUDA_CHECK(cudaOccupancyMaxActiveBlocksPerMultiprocessor(
-            &num_blocks_per_sm, rms_norm_vector_single_kernel, block_size,
-            block_size * sizeof(float)));
-
-        cudaDeviceProp prop;
-        CUDA_CHECK(cudaGetDeviceProperties(&prop, 0));
-
-        int max_blocks = num_blocks_per_sm * prop.multiProcessorCount;
-        int cooperative_limit = min(max_blocks, 256);
-        cached_num_blocks = cooperative_limit;
-    }
-
-    int num_blocks = min((n + block_size - 1) / block_size, cached_num_blocks);
-
-    // Allocate/reallocate partial_sums only if needed
-    if (d_partial_sums == nullptr || num_blocks > allocated_blocks) {
-        if (d_partial_sums != nullptr) {
-            CUDA_CHECK(cudaFree(d_partial_sums));
-        }
-        CUDA_CHECK(cudaMalloc(&d_partial_sums, num_blocks * sizeof(float)));
-        allocated_blocks = num_blocks;
-    }
-
-    size_t shared_mem = block_size * sizeof(float);
-
-    // Cooperative launch arguments
-    void* kernel_args[] = {
-        (void*)&d_input,
-        (void*)&d_output,
-        (void*)&d_partial_sums,
-        (void*)&n
-    };
-
-    CUDA_CHECK(cudaLaunchCooperativeKernel(
-        (void*)rms_norm_vector_single_kernel,
-        dim3(num_blocks),
-        dim3(block_size),
-        kernel_args,
-        shared_mem));
-
-    CUDA_CHECK(cudaGetLastError());
-}
-
- // Static buffers for kernel wrappers (avoid per-call malloc overhead)
- static float* g_basic_partial_sums = nullptr;
- static int g_basic_allocated_blocks = 0;
-
- /**
-  * Cleanup function for static buffers
-  * Call before program exit or when switching contexts
-  */
- void rms_norm_vector_cleanup() {
-    if (g_basic_partial_sums != nullptr) {
-        cudaFree(g_basic_partial_sums);
-        g_basic_partial_sums = nullptr;
-        g_basic_allocated_blocks = 0;
-    }
- }
-
- /**
-  * Wrapper functions
-  * Uses static allocation to avoid cudaMalloc/cudaFree overhead per call
-  */
- void rms_norm_vector_basic(const float* d_input, float* d_output, int n) {
+static float* g_basic_partial_sums = nullptr;
+static int g_basic_allocated_blocks = 0;
+void rms_norm_vector_basic(const float* d_input, float* d_output, int n) {
     int block_size = 256;
     int num_blocks = min((n + block_size - 1) / block_size, 1024);
 
@@ -323,67 +253,146 @@ void rms_norm_vector_coop(const float* d_input, float* d_output, int n) {
 }
 
 
- float measure_rms_norm_vector_time(void (*kernel_func)(const float*, float*, int),
-                                    const float* d_input, float* d_output, int n,
-                                    int num_iterations) {
-     cudaEvent_t start, stop;
-     CUDA_CHECK(cudaEventCreate(&start));
-     CUDA_CHECK(cudaEventCreate(&stop));
- 
-     for (int i = 0; i < 10; i++) {
-         kernel_func(d_input, d_output, n);
-     }
-     CUDA_CHECK(cudaDeviceSynchronize());
- 
-     CUDA_CHECK(cudaEventRecord(start));
-     for (int i = 0; i < num_iterations; i++) {
-         kernel_func(d_input, d_output, n);
-     }
-     CUDA_CHECK(cudaEventRecord(stop));
-     CUDA_CHECK(cudaEventSynchronize(stop));
- 
-     float milliseconds = 0;
-     CUDA_CHECK(cudaEventElapsedTime(&milliseconds, start, stop));
- 
-     CUDA_CHECK(cudaEventDestroy(start));
-     CUDA_CHECK(cudaEventDestroy(stop));
- 
-     return milliseconds / static_cast<float>(num_iterations);
- }
- 
- 
- /**
-  * Get theoretical peak memory bandwidth from device properties (calculated)
-  */
- float get_peak_bandwidth_vector_calculated() {
-     cudaDeviceProp prop;
-     CUDA_CHECK(cudaGetDeviceProperties(&prop, 0));
+/**
+ * Wrapper function for single-kernel version using cooperative launch
+ * Uses static allocation to avoid repeated malloc/free overhead
+ */
+static float* g_coop_partial_sums = nullptr;
+static int g_coop_allocated_blocks = 0;
+void rms_norm_vector_coop(const float* d_input, float* d_output, int n) {
+    static float* g_coop_partial_sums = nullptr;
+    static int g_coop_allocated_blocks = 0;
+    static int cached_num_blocks = 0;
 
-     int memClockRate;
-     cudaDeviceGetAttribute(&memClockRate, cudaDevAttrMemoryClockRate, 0);
+    int block_size = 256;
 
-     // Peak bandwidth in GB/s (decimal)
-     float peak_gb_s = 2.0f * static_cast<float>(memClockRate) * (static_cast<float>(prop.memoryBusWidth) / 8.0f) / 1e6f;
-     return peak_gb_s;
- }
- 
- 
- /**
-  * Get theoretical peak memory bandwidth from datasheet
-  * RTX 4070 Ti SUPER: 672 GB/s (official specification)
-  */
- float get_peak_bandwidth_vector_datasheet() {
-     return GPU_PEAK_BANDWIDTH_DATASHEET;
- }
- 
- 
- float calculate_rms_norm_vector_bandwidth(int n, float time_ms) {
-     // Effective memory: input read (n) + output write (n) = 2n
-     // Note: Implementation reads input twice (phase1 + phase2), but we measure
-     // effective bandwidth (algorithm's minimum required data movement)
-     size_t bytes = 2 * (size_t)n * sizeof(float);
-     float time_s = time_ms / 1000.0f;
+    // Only query occupancy once
+    if (cached_num_blocks == 0) {
+        int num_blocks_per_sm;
+        CUDA_CHECK(cudaOccupancyMaxActiveBlocksPerMultiprocessor(
+            &num_blocks_per_sm, rms_norm_vector_single_kernel, block_size,
+            block_size * sizeof(float)));
 
-     // Use decimal GB/s to match official specs (1 GB = 10^9 bytes)
-     return (static_cast<float>(bytes) / time_s) / 1e9f;
- }
+        cudaDeviceProp prop;
+        CUDA_CHECK(cudaGetDeviceProperties(&prop, 0));
+
+        int max_blocks = num_blocks_per_sm * prop.multiProcessorCount;
+        int cooperative_limit = min(max_blocks, 256);
+        cached_num_blocks = cooperative_limit;
+    }
+
+    int num_blocks = min((n + block_size - 1) / block_size, cached_num_blocks);
+
+    // Allocate/reallocate partial_sums only if needed
+    if (g_coop_partial_sums == nullptr || num_blocks > g_coop_allocated_blocks) {
+        if (g_coop_partial_sums != nullptr) {
+            CUDA_CHECK(cudaFree(g_coop_partial_sums));
+        }
+        CUDA_CHECK(cudaMalloc(&g_coop_partial_sums, num_blocks * sizeof(float)));
+        g_coop_allocated_blocks = num_blocks;
+    }
+
+    size_t shared_mem = block_size * sizeof(float);
+
+    // Cooperative launch arguments
+    void* kernel_args[] = {
+        (void*)&d_input,
+        (void*)&d_output,
+        (void*)&g_coop_partial_sums,
+        (void*)&n
+    };
+
+    CUDA_CHECK(cudaLaunchCooperativeKernel(
+        (void*)rms_norm_vector_single_kernel,
+        dim3(num_blocks),
+        dim3(block_size),
+        kernel_args,
+        shared_mem));
+
+    CUDA_CHECK(cudaGetLastError());
+}
+
+
+/**
+ * Cleanup function for static buffers
+ * Call before program exit or when switching contexts
+ */
+void rms_norm_vector_cleanup() {
+    if (g_basic_partial_sums != nullptr) {
+        cudaFree(g_basic_partial_sums);
+        g_basic_partial_sums = nullptr;
+        g_basic_allocated_blocks = 0;
+    }
+
+    if (g_coop_partial_sums != nullptr) {
+        cudaFree(g_coop_partial_sums);
+        g_coop_partial_sums = nullptr;
+        g_coop_allocated_blocks = 0;
+    }
+}
+
+
+float measure_rms_norm_vector_time(void (*kernel_func)(const float*, float*, int),
+                                const float* d_input, float* d_output, int n,
+                                int num_iterations) {
+    cudaEvent_t start, stop;
+    CUDA_CHECK(cudaEventCreate(&start));
+    CUDA_CHECK(cudaEventCreate(&stop));
+
+    // Warm-up
+    for (int i = 0; i < 10; i++) {
+        kernel_func(d_input, d_output, n);
+    }
+    CUDA_CHECK(cudaDeviceSynchronize());
+
+    CUDA_CHECK(cudaEventRecord(start));
+    for (int i = 0; i < num_iterations; i++) {
+        kernel_func(d_input, d_output, n);
+    }
+    CUDA_CHECK(cudaEventRecord(stop));
+    CUDA_CHECK(cudaEventSynchronize(stop));
+
+    float milliseconds = 0;
+    CUDA_CHECK(cudaEventElapsedTime(&milliseconds, start, stop));
+
+    CUDA_CHECK(cudaEventDestroy(start));
+    CUDA_CHECK(cudaEventDestroy(stop));
+
+    return milliseconds / static_cast<float>(num_iterations);
+}
+ 
+ 
+/**
+ * Get theoretical peak memory bandwidth from device properties (calculated)
+ */
+float get_peak_bandwidth_vector_calculated() {
+    cudaDeviceProp prop;
+    CUDA_CHECK(cudaGetDeviceProperties(&prop, 0));
+
+    int memClockRate;
+    cudaDeviceGetAttribute(&memClockRate, cudaDevAttrMemoryClockRate, 0);
+
+    // Peak bandwidth in GB/s (decimal)
+    float peak_gb_s = 2.0f * static_cast<float>(memClockRate) * (static_cast<float>(prop.memoryBusWidth) / 8.0f) / 1e6f;
+    return peak_gb_s;
+}
+ 
+ 
+/**
+ * Get theoretical peak memory bandwidth from datasheet
+ */
+float get_peak_bandwidth_vector_datasheet() {
+    return GPU_PEAK_BANDWIDTH_DATASHEET;
+}
+ 
+ 
+float calculate_rms_norm_vector_bandwidth(int n, float time_ms) {
+    // Effective memory: input read (n) + output write (n) = 2n
+    // Note: Implementation reads input twice (phase1 + phase2), but we measure
+    // effective bandwidth (algorithm's minimum required data movement)
+    size_t bytes = 2 * (size_t)n * sizeof(float);
+    float time_s = time_ms / 1000.0f;
+
+    // Use decimal GB/s to match official specs (1 GB = 10^9 bytes)
+    return (static_cast<float>(bytes) / time_s) / 1e9f;
+}

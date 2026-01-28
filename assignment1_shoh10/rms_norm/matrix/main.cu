@@ -8,6 +8,7 @@
 #include <stdlib.h>
 #include <math.h>
 #include "../../common/gpu_specs.h"
+#include "rms_norm_matrix.h"
 
 #define CUDA_CHECK(call) \
     do { \
@@ -20,15 +21,6 @@
     } while(0)
 
 #define EPSILON 1e-6f
-
-// Function declarations
-extern void rms_norm_matrix_basic(const float*, float*, int, int);
-extern void rms_norm_matrix_optimized(const float*, float*, int, int);
-extern void rms_norm_matrix_fast(const float*, float*, int, int);
-extern void rms_norm_matrix_w2l3_hybrid(const float*, float*, int, int);
-extern float measure_rms_norm_time(void (*)(const float*, float*, int, int),
-                                const float*, float*, int, int, int);
-extern float calculate_rms_norm_bandwidth(int, int, float);
 
 // Picked kernel: rms_norm_matrix_w2l3_hybrid
 void (*picked_kernel)(const float*, float*, int, int) = rms_norm_matrix_w2l3_hybrid;
@@ -198,10 +190,12 @@ void benchmark_performance() {
                         cudaMemcpyHostToDevice));
 
     // Benchmark picked kernel
-    // rms_norm_matrix_basic rms_norm_matrix_optimized rms_norm_matrix_fast 
-    // rms_norm_matrix_w2l3_reduction rms_norm_matrix_w2l3_tile rms_norm_matrix_w2l3_hybrid
     printf("Testing RMS Norm Matrix kernel...\n");
+
     float time_picked = measure_rms_norm_time(picked_kernel, d_input, d_output, rows, cols, num_iterations);
+    
+    printf("  [DEBUG] Benchmark complete\n");
+#if !defined(PROFILE_NCUS)
     float bandwidth_picked = calculate_rms_norm_bandwidth(rows, cols, time_picked);
     const float peak_bandwidth_datasheet = GPU_PEAK_BANDWIDTH_DATASHEET;
     float percentage_picked = (bandwidth_picked / peak_bandwidth_datasheet) * 100.0f;
@@ -209,7 +203,6 @@ void benchmark_performance() {
     printf("  Bandwidth: %.2f GB/s (%.1f%% of peak %.2f GB/s)\n",
     bandwidth_picked, percentage_picked, peak_bandwidth_datasheet); 
 
-#if !defined(PROFILE_NCUS)
     // Verify correctness
     printf("\nVerifying kernel correctness...\n");
     (*picked_kernel)(d_input, d_output, rows, cols);

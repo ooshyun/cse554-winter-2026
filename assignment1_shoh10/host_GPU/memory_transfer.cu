@@ -129,17 +129,19 @@ int main() {
 
     // Test parameters
     const int num_iterations = 100;
+    const int max_power = 28;  // Up to 256 MB
+    bool use_pinned = false;
 
     printf("================================================================================\n");
     printf("Q1: Regular (Pageable) Memory\n");
     printf("================================================================================\n");
 
     // Test sizes from 2^0 to 2^28 (256 MB)
-    for (int power = 0; power <= 28; power++) {
+    for (int power = 0; power <= max_power; power++) {
         size_t size = 1 << power;
         // Reduce iterations for very large sizes to avoid timeout
         int iterations = (power > 24) ? 10 : num_iterations;
-        measure_bandwidth(size, iterations, false, csv_file);
+        measure_bandwidth(size, iterations, use_pinned, csv_file);
     }
 
     printf("\n");
@@ -147,10 +149,11 @@ int main() {
     printf("Q2: Pinned (Page-Locked) Memory\n");
     printf("================================================================================\n");
 
-    for (int power = 0; power <= 28; power++) {
+    use_pinned = true;
+    for (int power = 0; power <= max_power; power++) {
         size_t size = 1 << power;
         int iterations = (power > 24) ? 10 : num_iterations;
-        measure_bandwidth(size, iterations, true, csv_file);
+        measure_bandwidth(size, iterations, use_pinned, csv_file);
     }
 
     if (csv_file) {
@@ -165,7 +168,7 @@ int main() {
     printf("PEAK BANDWIDTH MEASUREMENT\n");
     printf("================================================================================\n");
 
-    size_t large_size = 128 << 20;  // 128 MB - large enough to saturate bandwidth
+    size_t large_size = 256 << 20;  // 256 MB - large enough to saturate bandwidth
     float *h_pinned, *d_data;
     CUDA_CHECK(cudaMallocHost(&h_pinned, large_size));
     CUDA_CHECK(cudaMalloc(&d_data, large_size));
@@ -210,7 +213,7 @@ int main() {
     CUDA_CHECK(cudaEventElapsedTime(&time_ms, start, stop));
     float peak_d2h = static_cast<float>((static_cast<double>(large_size) * 100.0 / static_cast<double>(time_ms) * 1000.0) / (1024.0 * 1024.0 * 1024.0));
 
-    printf("Transfer size: 128 MB\n");
+    printf("Transfer the largest size: 256 MB\n");
     printf("Peak Host-to-Device (pinned): %.2f GB/s\n", peak_h2d);
     printf("Peak Device-to-Host (pinned): %.2f GB/s\n", peak_d2h);
     printf("Average bidirectional: %.2f GB/s\n", (peak_h2d + peak_d2h) / 2.0f);

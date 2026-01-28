@@ -9,6 +9,7 @@
 #include <math.h>
 #include <time.h>
 #include "../../common/gpu_specs.h"
+#include "silu.h"
 
 // Error checking macro
 #define CUDA_CHECK(call) \
@@ -20,14 +21,6 @@
             exit(EXIT_FAILURE); \
         } \
     } while(0)
-
-// Function declarations from silu.cu
-extern void silu_cuda_basic(const float* d_input, float* d_output, int n);
-extern void silu_cuda_optimized(const float* d_input, float* d_output, int n);
-extern void silu_cuda_fast(const float* d_input, float* d_output, int n);
-extern float measure_kernel_time(void (*)(const float*, float*, int),
-                                const float*, float*, int, int);
-extern float calculate_bandwidth(int n, float time_ms);
 
 // Picked kernel: silu_cuda_basic
 void (*picked_kernel)(const float*, float*, int) = silu_cuda_basic;

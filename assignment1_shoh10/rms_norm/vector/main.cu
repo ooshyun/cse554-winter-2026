@@ -8,6 +8,7 @@
 #include <stdlib.h>
 #include <math.h>
 #include "../../common/gpu_specs.h"
+#include "rms_norm_vector.h"
 
 #define CUDA_CHECK(call) \
     do { \
@@ -20,14 +21,6 @@
     } while(0)
 
 #define EPSILON 1e-6f
-
-// Function declarations
-extern void rms_norm_vector_basic(const float*, float*, int);
-extern void rms_norm_vector_coop(const float*, float*, int);
-extern void rms_norm_vector_cleanup();
-extern float measure_rms_norm_vector_time(void (*)(const float*, float*, int),
-                                          const float*, float*, int, int);
-extern float calculate_rms_norm_vector_bandwidth(int, float);
 
 void (*picked_kernel)(const float*, float*, int) = rms_norm_vector_basic;
 
@@ -176,28 +169,23 @@ void benchmark_performance() {
     CUDA_CHECK(cudaMemcpy(d_input, h_input, n * sizeof(float),
                           cudaMemcpyHostToDevice));
 
-
     // Benchmark picked kernel
     printf("Testing RMS Norm Vector kernel...\n");
-    fflush(stdout);
 
     // DEBUG: Try single execution first
     printf("  [DEBUG] Running single test execution...\n");
-    fflush(stdout);
     (*picked_kernel)(d_input, d_output, n);
     CUDA_CHECK(cudaGetLastError());
     printf("  [DEBUG] Kernel launch successful\n");
-    fflush(stdout);
     CUDA_CHECK(cudaDeviceSynchronize());
     printf("  [DEBUG] Synchronization successful\n");
-    fflush(stdout);
 
     printf("  [DEBUG] Starting timed benchmark...\n");
-    fflush(stdout);
     float time_picked = measure_rms_norm_vector_time(
       picked_kernel, d_input, d_output, n, num_iterations);
     printf("  [DEBUG] Benchmark complete\n");
-    fflush(stdout);
+
+#if !defined(PROFILE_NCUS)
     float bandwidth_picked = calculate_rms_norm_vector_bandwidth(n, time_picked);
     const float peak_bandwidth_datasheet = GPU_PEAK_BANDWIDTH_DATASHEET;
     float percentage_picked = (bandwidth_picked / peak_bandwidth_datasheet) * 100.0f;
@@ -205,7 +193,6 @@ void benchmark_performance() {
     printf("  Bandwidth: %.2f GB/s (%.1f%% of peak %.2f GB/s)\n",
       bandwidth_picked, percentage_picked, peak_bandwidth_datasheet); 
 
-#if !defined(PROFILE_NCUS)
     // Verify correctness
     printf("\nVerifying kernel correctness...\n");
     (*picked_kernel)(d_input, d_output, n);

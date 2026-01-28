@@ -3,6 +3,7 @@
  * CUDA kernel for RMS Normalization on matrix (8192, 8192)
  */
 
+#include "rms_norm_matrix.h"
 #include <cuda_runtime.h>
 #include <device_launch_parameters.h>
 #include <stdio.h>
@@ -28,6 +29,9 @@
  */
 __global__ void rms_norm_kernel_basic(const float* input, float* output,
                                     int rows, int cols) {
+    
+    // blockIdx.x  : 0 <= x < grid size
+    // threadIdx.x : x <= block size
     int row = blockIdx.x * blockDim.x + threadIdx.x;
 
     if (row < rows) {
@@ -52,61 +56,21 @@ __global__ void rms_norm_kernel_basic(const float* input, float* output,
 
 
 /**
- * Optimized RMS Norm kernel with shared memory reduction
- * Each thread block processes one row
- */
-__global__ void rms_norm_kernel_optimized(const float* input, float* output,
-                                        int rows, int cols) {
-    extern __shared__ float shared[];
-
-    int row = blockIdx.x;
-    int tid = threadIdx.x;
-    int block_size = blockDim.x;
-
-    if (row >= rows) return;
-
-    // Each thread computes partial sum of squares
-    float partial_sum = 0.0f;
-    for (int col = tid; col < cols; col += block_size) {
-        int idx = row * cols + col;
-        float val = input[idx];
-        partial_sum += val * val;
-    }
-
-    // Store partial sum in shared memory
-    shared[tid] = partial_sum;
-    __syncthreads();
-
-    // Reduce within block using shared memory
-    for (int stride = block_size / 2; stride > 0; stride >>= 1) {
-        if (tid < stride) {
-            shared[tid] += shared[tid + stride];
-        }
-        __syncthreads();
-    }
-
-    // Thread 0 has the total sum
-    __shared__ float rms;
-    if (tid == 0) {
-        float sum_sq = shared[0];
-        rms = sqrtf(sum_sq / cols + EPSILON);
-    }
-    __syncthreads();
-
-    // Normalize the row
-    for (int col = tid; col < cols; col += block_size) {
-        int idx = row * cols + col;
-        output[idx] = input[idx] / rms;
-    }
-}
-
-
-/**
  * Highly optimized RMS Norm kernel
  * - Warp-level primitives for reduction
  * - Vectorized loads/stores where possible
  * - Optimized memory access patterns
  */
+
+/*
+    __shfl_down_sync: A high-speed intrinsic that enables direct register-to-register data exchange between threads, bypassing shared memory entirely.
+    Step 1 (offset=16): Threads 0–15 retrieve values from threads 16–31 and add them to their own.
+    Step 2 (offset=8): Threads 0–7 retrieve values from threads 8–15 and add them.
+    Step 3 (offset=4): Threads 0–3 retrieve values from threads 4–7 and add them.
+    Step 4 (offset=2): Threads 0–1 retrieve values from threads 2–3 and add them.
+    Step 5 (offset=1): Thread 0 retrieves the value from thread 1 and adds it.
+    Result: Ultimately, the val variable in thread 0 stores the total sum of the entire warp (all 32 threads).
+*/
 __device__ __forceinline__ float warp_reduce_sum(float val) {
     for (int offset = 16; offset > 0; offset /= 2) {
         val += __shfl_down_sync(0xffffffff, val, offset);
@@ -117,8 +81,12 @@ __device__ __forceinline__ float warp_reduce_sum(float val) {
 
 __global__ void rms_norm_kernel_fast(const float* input, float* output,
                                     int rows, int cols) {
+    // Dynamic Shared Memory
+    // If you want static,
+    // int shared_mem_size = 256 * sizeof(float); 
+    // rms_norm_kernel_fast<<<grid_size, block_size, shared_mem_size>>>
+    // (d_input, d_output, rows, cols);
     extern __shared__ float shared[];
-
     int row = blockIdx.x;
     int tid = threadIdx.x;
     int warp_id = tid / 32;
@@ -134,6 +102,15 @@ __global__ void rms_norm_kernel_fast(const float* input, float* output,
     float partial_sum = 0.0f;
 
     // Vectorized processing using float4
+    /*
+        struct float4 {
+            float x; // 0~3 bytes
+            float y; // 4~7 bytes
+            float z; // 8~11 bytes
+            float w; // 12~15 bytes
+        };
+        "__restrict__ is a qualifier that serves as a promise to the compiler that the decorated pointer is the sole means of accessing a specific memory region within its scope, asserting that no pointer aliasing will occur.
+    */
     int col = tid * 4;
     if (col + 3 < cols) {
         for (; col + 3 < cols; col += block_size * 4) {
@@ -145,6 +122,7 @@ __global__ void rms_norm_kernel_fast(const float* input, float* output,
         }
     }
 
+    // TODO(analyze)
     // Handle remaining elements
     for (col = tid + (cols / 4) * 4; col < cols; col += block_size) {
         float val = row_input[col];
@@ -306,19 +284,6 @@ void rms_norm_matrix_basic(const float* d_input, float* d_output,
     CUDA_CHECK(cudaGetLastError());
 }
 
-
-void rms_norm_matrix_optimized(const float* d_input, float* d_output,
-                            int rows, int cols) {
-    int block_size = 256;
-    int grid_size = rows;
-    size_t shared_mem = static_cast<size_t>(block_size) * sizeof(float);
-
-    rms_norm_kernel_optimized<<<grid_size, block_size, shared_mem>>>(
-        d_input, d_output, rows, cols);
-    CUDA_CHECK(cudaGetLastError());
-}
-
-
 void rms_norm_matrix_fast(const float* d_input, float* d_output,
                         int rows, int cols) {
     int block_size = 256;
@@ -393,7 +358,6 @@ float get_peak_bandwidth_rms_norm_calculated() {
 
 /**
  * Get theoretical peak memory bandwidth from datasheet
- * RTX 4070 Ti SUPER: 672 GB/s (official specification)
  */
 float get_peak_bandwidth_rms_norm_datasheet() {
     return GPU_PEAK_BANDWIDTH_DATASHEET;
