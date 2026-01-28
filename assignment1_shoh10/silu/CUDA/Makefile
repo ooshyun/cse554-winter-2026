@@ -2,7 +2,7 @@
 # CSE 554 Assignment 1 - Section 1
 
 # Include common GPU detection and flags
-include ../../../common.mk
+include ../../common.mk
 
 # Target executable
 TARGET = silu_test

@@ -2,7 +2,7 @@
 # CSE 554 Assignment 1 - Section 2
 
 # Include common GPU detection and flags
-include ../../../common.mk
+include ../../common.mk
 
 # Cooperative groups require compute capability 6.0+
 # Note: -rdc=true (relocatable device code) required for cooperative kernel launch

@@ -2,7 +2,7 @@
 # CSE 554 Assignment 1 - Section 2
 
 # Include common GPU detection and flags
-include ../../../common.mk
+include ../../common.mk
 
 TARGET = rms_norm_matrix_test
 SOURCES = main.cu rms_norm_matrix.cu

@@ -2,7 +2,7 @@
 # CSE 554 Assignment 1 - Section 3
 
 # Include common GPU detection and flags
-include ../../common.mk
+include ../common.mk
 
 # Targets
 HOST_GPU = host_GPU_test
