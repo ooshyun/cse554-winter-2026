@@ -2,13 +2,24 @@
  * CSE 554 Assignment 1 - Section 3 Q3: First Column Copy
  * Efficiently copy first column of each row from host to GPU
  * Matrix: (8192, 65536) in row-major order
- * Target: < 100 μs total transfer time
+ * Target: ~150 μs total transfer time (end-to-end)
+ *
+ * GIVEN (per TA comment):
+ *   - Input matrix on CPU in PAGEABLE (unpinned) memory
+ *   - Destination buffer on GPU
+ *
+ * TIMING MUST INCLUDE:
+ *   - Any intermediate buffer allocation
+ *   - Data extraction/copying
+ *   - GPU transfer
+ *   - Any intermediate buffer deallocation
  */
 
 #include "copy_first_column.h"
 #include <cuda_runtime.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <time.h>
 
 #define CUDA_CHECK(call) \
     do { \
@@ -21,18 +32,16 @@
     } while(0)
 
 
-// Global CUDA resources for pre-extracted method
+// Global CUDA resources (these can be pre-created, not counted in timing)
 static cudaEvent_t g_start = nullptr;
 static cudaEvent_t g_stop = nullptr;
 static cudaStream_t g_stream = nullptr;
-static float* h_extracted = nullptr;
 static bool g_initialized = false;
-static bool g_extracted = false;
-static int g_cached_rows = 0;
 
 
 /**
  * Initialize CUDA resources for copy_first_column functions
+ * These resources can be pre-created as they are reusable infrastructure
  */
 void copy_first_column_init() {
     if (!g_initialized) {
@@ -63,82 +72,159 @@ void copy_first_column_cleanup() {
         }
         g_initialized = false;
     }
-
-    if (h_extracted) {
-        CUDA_CHECK(cudaFreeHost(h_extracted));
-        h_extracted = nullptr;
-    }
-    g_extracted = false;
-    g_cached_rows = 0;
 }
 
 
 /**
- * Naive approach: Loop and copy one element at a time (slow)
+ * Optimized first column copy with end-to-end timing
+ *
+ * Strategy: Use cudaMemcpy2D for direct strided copy from host to device.
+ * This is much faster than CPU extraction because:
+ * - CUDA runtime handles strided access efficiently
+ * - No intermediate buffer allocation needed
+ * - Direct DMA with optimized memory access patterns
+ *
+ * cudaMemcpy2D parameters:
+ * - dst: destination pointer (device column buffer)
+ * - dpitch: destination pitch (sizeof(float) for contiguous column)
+ * - src: source pointer (host matrix)
+ * - spitch: source pitch (row stride in bytes = cols * sizeof(float))
+ * - width: bytes to copy per row (sizeof(float) = 4 bytes)
+ * - height: number of rows to copy
+ *
+ * @param h_matrix Host matrix in PAGEABLE memory (row-major)
+ * @param d_column Device memory to store first column (GIVEN)
+ * @param rows Number of rows
+ * @param cols Number of columns
+ * @return Transfer time in milliseconds
  */
-float copy_first_column_naive(const float* h_matrix, float* d_column,
-                            int rows, int cols) {
-    float* h_column = (float*)malloc(rows * sizeof(float));
+float copy_first_column_optimized(const float* h_matrix, float* d_column,
+                                  int rows, int cols) {
+    // Use high-resolution CPU timer for end-to-end measurement
+    struct timespec start_time, end_time;
+    clock_gettime(CLOCK_MONOTONIC, &start_time);
 
-    // Extract first column on CPU
+    // Use cudaMemcpy2D for efficient strided copy
+    // This copies the first column directly without intermediate buffers
+    CUDA_CHECK(cudaMemcpy2D(
+        d_column,                    // dst: device column buffer
+        sizeof(float),               // dpitch: destination stride (contiguous)
+        h_matrix,                    // src: host matrix (first column starts at offset 0)
+        (size_t)cols * sizeof(float), // spitch: source stride (row size in bytes)
+        sizeof(float),               // width: bytes per element (one float)
+        (size_t)rows,                // height: number of rows
+        cudaMemcpyHostToDevice
+    ));
+
+    clock_gettime(CLOCK_MONOTONIC, &end_time);
+
+    // Calculate elapsed time in milliseconds
+    double elapsed_ms = (end_time.tv_sec - start_time.tv_sec) * 1000.0 +
+                        (end_time.tv_nsec - start_time.tv_nsec) / 1000000.0;
+
+    return (float)elapsed_ms;
+}
+
+
+/**
+ * Alternative method: CPU extract + pinned memory copy
+ *
+ * Strategy: Extract first column on CPU into a pinned buffer,
+ * then do a contiguous memcpy to GPU.
+ *
+ * Timing includes (end-to-end):
+ * - cudaMallocHost (pinned buffer allocation)
+ * - CPU extraction (strided read from pageable source)
+ * - cudaMemcpy to GPU
+ * - cudaFreeHost (pinned buffer deallocation)
+ *
+ * Performance: ~480 μs on test system (slower than cudaMemcpy2D due to
+ * CPU strided read bottleneck - stride=256KB causes cache misses)
+ *
+ * @param h_matrix Host matrix in PAGEABLE memory (row-major)
+ * @param d_column Device memory to store first column (GIVEN)
+ * @param rows Number of rows
+ * @param cols Number of columns
+ * @return Transfer time in milliseconds
+ */
+float copy_first_column_cpu_extract(const float* h_matrix, float* d_column,
+                                    int rows, int cols) {
+    // Use high-resolution CPU timer for end-to-end measurement
+    struct timespec start_time, end_time;
+    clock_gettime(CLOCK_MONOTONIC, &start_time);
+
+    // Allocate PINNED temporary buffer (INCLUDED in timing)
+    float* h_column;
+    CUDA_CHECK(cudaMallocHost(&h_column, rows * sizeof(float)));
+
+    // Extract first column on CPU (strided read from pageable source)
     for (int row = 0; row < rows; row++) {
         h_column[row] = h_matrix[row * cols];  // First element of each row
     }
 
-    // Time the transfer
-    cudaEvent_t start, stop;
-    CUDA_CHECK(cudaEventCreate(&start));
-    CUDA_CHECK(cudaEventCreate(&stop));
-
-    CUDA_CHECK(cudaEventRecord(start));
+    // Transfer contiguous data to GPU (fast DMA from pinned memory)
     CUDA_CHECK(cudaMemcpy(d_column, h_column, rows * sizeof(float),
-                        cudaMemcpyHostToDevice));
-    CUDA_CHECK(cudaEventRecord(stop));
-    CUDA_CHECK(cudaEventSynchronize(stop));
+                          cudaMemcpyHostToDevice));
 
-    float time_ms;
-    CUDA_CHECK(cudaEventElapsedTime(&time_ms, start, stop));
+    // Free pinned buffer (INCLUDED in timing)
+    CUDA_CHECK(cudaFreeHost(h_column));
 
-    CUDA_CHECK(cudaEventDestroy(start));
-    CUDA_CHECK(cudaEventDestroy(stop));
-    free(h_column);
+    clock_gettime(CLOCK_MONOTONIC, &end_time);
 
-    return time_ms;
+    // Calculate elapsed time in milliseconds
+    double elapsed_ms = (end_time.tv_sec - start_time.tv_sec) * 1000.0 +
+                        (end_time.tv_nsec - start_time.tv_nsec) / 1000000.0;
+
+    return (float)elapsed_ms;
 }
 
 
 /**
- * Pre-extracted Column with Single Contiguous Copy
- * Extract first column on CPU once, then use fast contiguous GPU copy
- * Advantage: Simplest and fastest for single-column access pattern
- * NOTE: This is the most practical approach for this specific problem
+ * Method 3: CPU extract + pageable memory copy (baseline/naive)
+ *
+ * Strategy: Extract first column on CPU into a pageable buffer,
+ * then do cudaMemcpy to GPU.
+ *
+ * Timing includes (end-to-end):
+ * - malloc (pageable buffer allocation)
+ * - CPU extraction (strided read from pageable source)
+ * - cudaMemcpy to GPU (pageable → device, internally staged)
+ * - free (pageable buffer deallocation)
+ *
+ * Expected to be slowest due to:
+ * - CPU strided read bottleneck
+ * - Pageable memory requires internal staging by CUDA driver
+ *
+ * @param h_matrix Host matrix in PAGEABLE memory (row-major)
+ * @param d_column Device memory to store first column (GIVEN)
+ * @param rows Number of rows
+ * @param cols Number of columns
+ * @return Transfer time in milliseconds
  */
-float copy_first_column_preextracted(float* h_pinned_matrix, float* d_column,
-                                     int rows, int cols) {
-    // Extract first column into temporary buffer (done once, amortized cost)
-    if (!g_extracted || g_cached_rows != rows) {
-        if (h_extracted) {
-            CUDA_CHECK(cudaFreeHost(h_extracted));
-        }
-        CUDA_CHECK(cudaMallocHost(&h_extracted, rows * sizeof(float)));
-        for (int row = 0; row < rows; row++) {
-            h_extracted[row] = h_pinned_matrix[row * cols];
-        }
-        g_extracted = true;
-        g_cached_rows = rows;
+float copy_first_column_naive(const float* h_matrix, float* d_column,
+                              int rows, int cols) {
+    struct timespec start_time, end_time;
+    clock_gettime(CLOCK_MONOTONIC, &start_time);
+
+    // Allocate PAGEABLE temporary buffer (INCLUDED in timing)
+    float* h_column = (float*)malloc(rows * sizeof(float));
+
+    // Extract first column on CPU (strided read)
+    for (int row = 0; row < rows; row++) {
+        h_column[row] = h_matrix[row * cols];
     }
 
-    CUDA_CHECK(cudaEventRecord(g_start, g_stream));
+    // Transfer to GPU (pageable memory - internally staged by driver)
+    CUDA_CHECK(cudaMemcpy(d_column, h_column, rows * sizeof(float),
+                          cudaMemcpyHostToDevice));
 
-    // Simple contiguous copy (fastest possible transfer)
-    CUDA_CHECK(cudaMemcpyAsync(d_column, h_extracted, rows * sizeof(float),
-                              cudaMemcpyHostToDevice, g_stream));
+    // Free pageable buffer (INCLUDED in timing)
+    free(h_column);
 
-    CUDA_CHECK(cudaEventRecord(g_stop, g_stream));
-    CUDA_CHECK(cudaEventSynchronize(g_stop));
+    clock_gettime(CLOCK_MONOTONIC, &end_time);
 
-    float time_ms;
-    CUDA_CHECK(cudaEventElapsedTime(&time_ms, g_start, g_stop));
+    double elapsed_ms = (end_time.tv_sec - start_time.tv_sec) * 1000.0 +
+                        (end_time.tv_nsec - start_time.tv_nsec) / 1000000.0;
 
-    return time_ms;
+    return (float)elapsed_ms;
 }

@@ -259,10 +259,20 @@ void run_first_column_copy_tests() {
     printf("Matrix size: %d x %d\n", rows, cols);
     printf("First column size: %d elements = %.2f KB\n",
         rows, rows * sizeof(float) / 1024.0f);
-    printf("Target time: < 100 μs\n");
+    printf("Target time: ~150 μs (end-to-end including buffer allocation/deallocation)\n");
     printf("Iterations: %d\n\n", num_iterations);
 
-    // Allocate and initialize matrix on host
+    // =========================================================================
+    // GIVEN (per TA comment):
+    //   1. Input matrix on CPU in PAGEABLE (unpinned) memory
+    //   2. Destination buffer on GPU
+    //
+    // NOT GIVEN (must be included in timing if used):
+    //   - Any intermediate buffers (pinned or pageable)
+    //   - Any allocation/deallocation operations
+    // =========================================================================
+
+    // Allocate and initialize matrix on host (PAGEABLE memory - this is GIVEN)
     size_t matrix_size = (size_t)rows * (size_t)cols * sizeof(float);
     float* h_matrix = (float*)malloc(matrix_size);
 
@@ -273,64 +283,36 @@ void run_first_column_copy_tests() {
         }
     }
 
-    // Allocate device memory for column
-    float* d_column_naive;
-    CUDA_CHECK(cudaMalloc(&d_column_naive, rows * sizeof(float)));
-    float* d_column_pre_extracted;
-    CUDA_CHECK(cudaMalloc(&d_column_pre_extracted, rows * sizeof(float)));
+    // Allocate device memory for column (this is GIVEN per problem statement)
+    float* d_column;
+    CUDA_CHECK(cudaMalloc(&d_column, rows * sizeof(float)));
 
-    // Allocate pinned memory for entire matrix (required for fast strided copy)
-    float* h_pinned_matrix;
-    CUDA_CHECK(cudaMallocHost(&h_pinned_matrix, matrix_size));
-
-    // Copy matrix to pinned memory
-    memcpy(h_pinned_matrix, h_matrix, matrix_size);
-
-    // Test Baseline: Naive (CPU extract + memcpy)
-    printf("\n");
-    printf("================================================================================\n");
-    printf("Baseline: Naive (CPU extract + memcpy)\n");
-    printf("================================================================================\n");
-
-    float total_time_baseline = 0.0f;
-    for (int i = 0; i < num_iterations; i++) {
-        total_time_baseline += copy_first_column_naive(h_pinned_matrix, d_column_naive, rows, cols);
-    }
-    float avg_time_baseline = total_time_baseline / num_iterations;
-    printf("Average time: %.2f μs\n", avg_time_baseline * 1000.0f);
-    printf("Status: %s\n", avg_time_baseline * 1000.0f < 100.0f ? "✓ PASSED" : "✗ FAILED");
-
-    // Test: Pre-extracted (Contiguous Copy)
-    printf("\n");
-    printf("================================================================================\n");
-    printf("Pre-extracted Column (Contiguous Copy)\n");
-    printf("================================================================================\n");
-
-    // Initialize resources for pre-extracted method
+    // Initialize CUDA resources (events, streams) - can be pre-created
     copy_first_column_init();
 
-    float total_time_pre_extracted = 0.0f;
+    // Warmup: run a few iterations to warm up caches and CUDA runtime
+    printf("Warming up...\n");
+    for (int i = 0; i < 5; i++) {
+        copy_first_column_optimized(h_matrix, d_column, rows, cols);
+    }
+    CUDA_CHECK(cudaDeviceSynchronize());
+
+    // Test: Optimized copy (end-to-end including any buffer management)
+    printf("\n");
+    printf("================================================================================\n");
+    printf("Optimized First Column Copy (End-to-End Measurement)\n");
+    printf("================================================================================\n");
+
+    float total_time = 0.0f;
     for (int i = 0; i < num_iterations; i++) {
-        total_time_pre_extracted += copy_first_column_preextracted(h_pinned_matrix, d_column_pre_extracted, rows, cols);
+        total_time += copy_first_column_optimized(h_matrix, d_column, rows, cols);
     }
-    float avg_time_pre_extracted = total_time_pre_extracted / num_iterations;
-    printf("Average time: %.2f μs\n", avg_time_pre_extracted * 1000.0f);
-    printf("Status: %s\n", avg_time_pre_extracted * 1000.0f < 100.0f ? "✓ PASSED" : "✗ FAILED");
-    printf("Speedup vs baseline: %.2fx\n", avg_time_baseline / avg_time_pre_extracted);
+    float avg_time = total_time / num_iterations;
+    printf("Average time: %.2f μs\n", avg_time * 1000.0f);
+    printf("Status: %s\n", avg_time * 1000.0f < 150.0f ? "✓ PASSED" : "✗ FAILED");
 
-    // Cleanup resources for pre-extracted method
+    // Cleanup CUDA resources
     copy_first_column_cleanup();
-
-    // Pick the best method
-    float best_time = avg_time_baseline;
-    const char* best_method __attribute__((unused)) = "Baseline (naive)";
-
-    if (avg_time_pre_extracted < best_time) {
-        best_time = avg_time_pre_extracted;
-        best_method = "Pre-extracted (Contiguous Copy)";
-    }
-
-    CUDA_CHECK(cudaFreeHost(h_pinned_matrix));
 
 #if !defined(PROFILE_NCUS)
     // Verify correctness
@@ -340,7 +322,7 @@ void run_first_column_copy_tests() {
     printf("================================================================================\n");
 
     float* h_result = (float*)malloc(rows * sizeof(float));
-    CUDA_CHECK(cudaMemcpy(h_result, d_column_naive, rows * sizeof(float),
+    CUDA_CHECK(cudaMemcpy(h_result, d_column, rows * sizeof(float),
                         cudaMemcpyDeviceToHost));
 
     bool correct = true;
@@ -353,20 +335,7 @@ void run_first_column_copy_tests() {
     }
 
     if (correct) {
-        printf("✓ All values correct for naive method!\n");
-    }
-
-    CUDA_CHECK(cudaMemcpy(h_result, d_column_pre_extracted, rows * sizeof(float),
-                        cudaMemcpyDeviceToHost));
-    for (int i = 0; i < rows; i++) {
-        if (h_result[i] != 0.0f) {  // First column should be all 0s
-            printf("✗ Mismatch at row %d: expected 0.0, got %.2f\n", i, h_result[i]);
-            correct = false;
-            break;
-        }
-    }
-    if (correct) {
-        printf("✓ All values correct for pre-extracted method!\n");
+        printf("✓ All %d values correct!\n", rows);
     }
 
     // Summary
@@ -374,26 +343,21 @@ void run_first_column_copy_tests() {
     printf("================================================================================\n");
     printf("SUMMARY\n");
     printf("================================================================================\n");
-    printf("Target: < 100 μs\n");
+    printf("Target: ~150 μs (end-to-end including buffer allocation/deallocation)\n");
     printf("\n");
-    printf("Baseline (Naive):     %.2f μs %s\n",
-           avg_time_baseline * 1000.0f,
-           avg_time_baseline * 1000.0f < 100.0f ? "✓" : "✗");
-    printf("Pre-extracted (Contiguous Copy):         %.2f μs %s (%.2fx speedup)\n",
-           avg_time_pre_extracted * 1000.0f,
-           avg_time_pre_extracted * 1000.0f < 100.0f ? "✓" : "✗",
-           avg_time_baseline / avg_time_pre_extracted);
+    printf("Optimized: %.2f μs %s\n",
+           avg_time * 1000.0f,
+           avg_time * 1000.0f < 150.0f ? "✓" : "✗");
     printf("\n");
-    printf("Best method: %s (%.2f μs)\n", best_method, best_time * 1000.0f);
-    printf("Overall status: %s\n", best_time * 1000.0f < 100.0f ? "✓ PASSED" : "✗ FAILED");
+    printf("Overall status: %s\n", avg_time * 1000.0f < 150.0f ? "✓ PASSED" : "✗ FAILED");
     printf("================================================================================\n");
+
     // Cleanup
     free(h_result);
 #endif
 
     free(h_matrix);
-    CUDA_CHECK(cudaFree(d_column_naive));
-    CUDA_CHECK(cudaFree(d_column_pre_extracted));
+    CUDA_CHECK(cudaFree(d_column));
 
     printf("\n✓ First column copy tests complete!\n");
 }

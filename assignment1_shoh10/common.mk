@@ -41,17 +41,28 @@ else
     GPU_NAME = Unknown
 endif
 
-# Standard NVCC flags with multi-architecture support
-# Aligned with CMakeLists.txt settings
-# Compile for both sm_75 (Quadro RTX 6000) and sm_89 (RTX 4070 Ti SUPER)
-# This creates "fat binaries" that work on both GPUs
-NVCC_FLAGS = -arch=$(SM_ARCH) -std=c++17 \
-             -gencode arch=compute_75,code=sm_75 \
-             -gencode arch=compute_89,code=sm_89 \
-             -O3 -DNDEBUG \
-             -Xcompiler=-fPIE \
-             -Xcompiler=-Wconversion \
-             -Xcompiler=-fno-strict-aliasing
+# Standard NVCC flags
+# Note: sm_89 requires CUDA 11.8+, C++17 requires CUDA 11+
+# For older CUDA (10.x), fall back to sm_75 and C++14
+CUDA_VERSION := $(shell nvcc --version | grep "release" | sed 's/.*release \([0-9]*\).*/\1/')
+ifeq ($(shell [ $(CUDA_VERSION) -ge 12 ] && echo yes),yes)
+    # CUDA 12+: support both sm_75 and sm_89, C++17
+    NVCC_FLAGS = -arch=$(SM_ARCH) -std=c++17 \
+                 -gencode arch=compute_75,code=sm_75 \
+                 -gencode arch=compute_89,code=sm_89 \
+                 -O3 -DNDEBUG \
+                 -Xcompiler=-fPIE \
+                 -Xcompiler=-Wconversion \
+                 -Xcompiler=-fno-strict-aliasing
+else
+    # Older CUDA (10.x): sm_75 only, C++14 (compatible with Turing and newer via JIT)
+    NVCC_FLAGS = -arch=sm_75 -std=c++14 \
+                 -gencode arch=compute_75,code=sm_75 \
+                 -O3 -DNDEBUG \
+                 -Xcompiler=-fPIE \
+                 -Xcompiler=-Wconversion \
+                 -Xcompiler=-fno-strict-aliasing
+endif
 
 LINK_FLAGS = -cudart static
 
